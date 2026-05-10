@@ -765,7 +765,10 @@ function bindAll(){
     if(isNaN(idx)){tMP=[];renderMySlots();return;}
     tMP=(cache.parties[idx]&&cache.parties[idx].pokes||[]).slice();renderMySlots();
   });
-  g('btn-add-opp').addEventListener('click',function(){openPokeModal('opp',null);});
+  g('btn-add-opp').addEventListener('click',function(){
+    if(cache.dex.length>0) openPickModal(function(p){tOP.push(p);renderMySlots();});
+    else openPokeModal('opp',null);
+  });
   g('btn-save-battle').addEventListener('click',saveBattle);
   g('btn-new-party').addEventListener('click',function(){openPartyModal(null);});
   g('btn-new-poke').addEventListener('click',function(){openPokeModal('dex',null);});
@@ -815,7 +818,10 @@ function renderMySlots(){
   var od=g('opp-slots'),oh='';
   for(var j=0;j<tOP.length;j++)oh+=slotHtml(tOP[j],j,'opp');
   od.innerHTML=oh;
-  bindSlots(od,function(i){openPokeModal('opp',i);});
+  bindSlots(od,function(i){
+    if(cache.dex.length>0) openPickModal(function(p){tOP[i]=p;renderMySlots();});
+    else openPokeModal('opp',i);
+  });
 }
 function renderPartySelect(){
   var s=g('sel-party'),prev=s.value,h='<option value="">-- パーティを選択 --</option>';
