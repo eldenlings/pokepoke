@@ -433,6 +433,20 @@ body {
 
 /* ========== move-grid ========== */
 .move-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* ========== 選出・初手 ========== */
+.sel-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface);
+  margin-bottom: 5px; cursor: pointer; transition: background .12s;
+}
+.sel-item:hover { background: var(--bg); }
+.sel-item input[type=checkbox], .sel-item input[type=radio] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+.sel-item label { font-size: 12px; font-weight: 500; cursor: pointer; flex: 1; }
+.sel-item.checked { background: var(--accent-bg); border-color: var(--accent); }
+.sel-item.lead-checked { background: #fff8e1; border-color: #f59e0b; }
+.sel-count { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -494,6 +508,26 @@ body {
         <div id="opp-slots" class="party-grid"></div>
         <button class="btn btn-sm" id="btn-add-opp" style="margin-top:4px;">＋ 追加</button>
       </div>
+      <!-- 選出・初手カード -->
+      <div class="card" id="selection-card" style="display:none;">
+        <p class="card-title">選出・初手</p>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">選出した3体と初手をそれぞれ選択してください</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <p style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--accent);">自分の選出（3体）</p>
+            <div id="my-select-list"></div>
+            <p style="font-size:11px;color:var(--text3);margin-top:8px;margin-bottom:4px;">初手</p>
+            <div id="my-lead-list"></div>
+          </div>
+          <div>
+            <p style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--lose);">相手の選出（3体）</p>
+            <div id="opp-select-list"></div>
+            <p style="font-size:11px;color:var(--text3);margin-top:8px;margin-bottom:4px;">初手</p>
+            <div id="opp-lead-list"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="form-row">
           <label>対戦結果</label>
@@ -822,6 +856,7 @@ function renderMySlots(){
     if(cache.dex.length>0) openPickModal(function(p){tOP[i]=p;renderMySlots();});
     else openPokeModal('opp',i);
   });
+  renderSelectionCard();
 }
 function renderPartySelect(){
   var s=g('sel-party'),prev=s.value,h='<option value="">-- パーティを選択 --</option>';
@@ -834,15 +869,19 @@ function saveBattle(){
   load(true);
   var pi=parseInt(g('sel-party').value);
   var pid=(!isNaN(pi)&&cache.parties[pi])?cache.parties[pi].id:null;
+  var mySelected=getChecked('my-select');
+  var myLead=getChecked('my-lead')[0];
+  var oppSelected=getChecked('opp-select');
+  var oppLead=getChecked('opp-lead')[0];
   sb.from('battles').insert({battle_date:new Date().toISOString().split('T')[0],result:g('battle-result').value,rank:g('battle-rank').value,memo:g('battle-memo').value.trim()||null,party_id:pid}).select().single().then(function(r){
     if(r.error)throw r.error;
     var bid=r.data.id;
-    function mkR(p,i){return{battle_id:bid,slot:i+1,pokemon_id:p.id||null,name:p.name,nature:p.nature||null,item:p.item||null,ability:p.ability||null,bs_hp:p.bs_hp||null,bs_atk:p.bs_atk||null,bs_def:p.bs_def||null,bs_spa:p.bs_spa||null,bs_spd:p.bs_spd||null,bs_spe:p.bs_spe||null,ev_hp:p.ev_hp||0,ev_atk:p.ev_atk||0,ev_def:p.ev_def||0,ev_spa:p.ev_spa||0,ev_spd:p.ev_spd||0,ev_spe:p.ev_spe||0,move1:p.move1||null,move2:p.move2||null,move3:p.move3||null,move4:p.move4||null};}
+    function mkR(p,i,selectedArr,leadIdx){return{battle_id:bid,slot:i+1,pokemon_id:p.id||null,name:p.name,nature:p.nature||null,item:p.item||null,ability:p.ability||null,bs_hp:p.bs_hp||null,bs_atk:p.bs_atk||null,bs_def:p.bs_def||null,bs_spa:p.bs_spa||null,bs_spd:p.bs_spd||null,bs_spe:p.bs_spe||null,ev_hp:p.ev_hp||0,ev_atk:p.ev_atk||0,ev_def:p.ev_def||0,ev_spa:p.ev_spa||0,ev_spd:p.ev_spd||0,ev_spe:p.ev_spe||0,move1:p.move1||null,move2:p.move2||null,move3:p.move3||null,move4:p.move4||null,is_selected:selectedArr.indexOf(i)>=0,is_lead:leadIdx===i};}
     var ins=[];
-    if(my.length)ins.push(sb.from('battle_my_pokemon').insert(my.map(mkR)));
-    if(tOP.length)ins.push(sb.from('battle_opp_pokemon').insert(tOP.map(mkR)));
+    if(my.length)ins.push(sb.from('battle_my_pokemon').insert(my.map(function(p,i){return mkR(p,i,mySelected,myLead);})));
+    if(tOP.length)ins.push(sb.from('battle_opp_pokemon').insert(tOP.map(function(p,i){return mkR(p,i,oppSelected,oppLead);})));
     return Promise.all(ins);
-  }).then(function(){tMP=[];tOP=[];g('battle-memo').value='';g('sel-party').value='';renderMySlots();toast('対戦を記録しました！');})
+  }).then(function(){tMP=[];tOP=[];g('battle-memo').value='';g('sel-party').value='';renderMySlots();renderSelectionCard();toast('対戦を記録しました！');})
   .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
@@ -1001,6 +1040,75 @@ function renderHistory(){
 function delBattle(id){
   if(!confirm('削除しますか？'))return;load(true);
   sb.from('battles').delete().eq('id',id).then(function(r){if(r.error)throw r.error;return Promise.all([renderHistory(),renderStats()]);}).then(function(){toast('削除しました');}).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
+}
+
+// ===== 選出・初手カード =====
+function renderSelectionCard(){
+  var sc=g('selection-card');
+  var hasParty=tMP.filter(Boolean).length>0||tOP.length>0;
+  sc.style.display=hasParty?'block':'none';
+  if(!hasParty)return;
+  // 自パーティ選出チェックボックス
+  var myList=g('my-select-list');
+  var myPokes=tMP.filter(Boolean);
+  myList.innerHTML=myPokes.map(function(p,i){
+    return '<div class="sel-item" id="my-sel-item-'+i+'"><input type="checkbox" id="my-sel-'+i+'" name="my-select" value="'+i+'" onchange="onSelChange('my','+i+')"><label for="my-sel-'+i+'">'+p.name+'</label></div>';
+  }).join('');
+  // 自パーティ初手ラジオ（選出されたもののみ）
+  renderLeadRadio('my');
+  // 相手選出
+  var oppList=g('opp-select-list');
+  oppList.innerHTML=tOP.map(function(p,i){
+    return '<div class="sel-item" id="opp-sel-item-'+i+'"><input type="checkbox" id="opp-sel-'+i+'" name="opp-select" value="'+i+'" onchange="onSelChange('opp','+i+')"><label for="opp-sel-'+i+'">'+p.name+'</label></div>';
+  }).join('');
+  renderLeadRadio('opp');
+}
+
+function onSelChange(side,idx){
+  var checkboxes=document.querySelectorAll('input[name="'+side+'-select"]:checked');
+  // 3体超えたら今チェックしたものを外す
+  if(checkboxes.length>3){
+    document.getElementById(side+'-sel-'+idx).checked=false;
+    toast('選出は3体までです');
+    return;
+  }
+  // チェック済みのスタイル更新
+  var all=document.querySelectorAll('input[name="'+side+'-select"]');
+  all.forEach(function(cb){
+    var item=document.getElementById(side+'-sel-item-'+cb.value);
+    if(item)item.classList.toggle('checked',cb.checked);
+  });
+  renderLeadRadio(side);
+}
+
+function renderLeadRadio(side){
+  var leadDiv=g(side+'-lead-list');
+  var checkboxes=document.querySelectorAll('input[name="'+side+'-select"]:checked');
+  var pokes=side==='my'?tMP.filter(Boolean):tOP;
+  if(checkboxes.length===0){leadDiv.innerHTML='<p style="font-size:11px;color:var(--text3);">選出を選んでください</p>';return;}
+  var html='';
+  checkboxes.forEach(function(cb){
+    var i=parseInt(cb.value);
+    var p=pokes[i];
+    if(!p)return;
+    html+='<div class="sel-item" id="'+side+'-lead-item-'+i+'"><input type="radio" id="'+side+'-lead-'+i+'" name="'+side+'-lead" value="'+i+'" onchange="onLeadChange(''+side+'','+i+')"><label for="'+side+'-lead-'+i+'">'+p.name+'</label></div>';
+  });
+  leadDiv.innerHTML=html;
+}
+
+function onLeadChange(side,idx){
+  var all=document.querySelectorAll('input[name="'+side+'-lead"]');
+  all.forEach(function(rb){
+    var item=document.getElementById(side+'-lead-item-'+rb.value);
+    if(item)item.classList.toggle('lead-checked',rb.checked);
+  });
+}
+
+function getChecked(name){
+  var inputs=document.querySelectorAll('input[name="'+name+'"]:checked');
+  var vals=[];
+  inputs.forEach(function(el){vals.push(parseInt(el.value));});
+  return vals;
 }
 
 // ===== 統計 =====
