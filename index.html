@@ -647,7 +647,7 @@ var NATURES=NM.concat(NN);
 var EK=['hp','atk','def','spa','spd','spe'];
 var SL={hp:'H',atk:'A',def:'B',spa:'C',spd:'D',spe:'S'};
 var BC={hp:'#4caf50',atk:'#f44336',def:'#ff9800',spa:'#2196f3',spd:'#9c27b0',spe:'#00bcd4'};
-var SCHEMA='pokemon_tracker';
+var SCHEMA='public';
 
 // ===== 状態 =====
 var sb=null,cache={dex:[],parties:[]};
@@ -727,7 +727,7 @@ function doConnect(){
   if(!url||!key){err.textContent='URLとキーを入力してください';err.style.display='block';return;}
   var btn=g('btn-connect');
   btn.textContent='接続中...';btn.disabled=true;
-  var client=supabase.createClient(url,key,{db:{schema:SCHEMA}});
+  var client=supabase.createClient(url,key,{db:{schema:"public"}});
   client.from('pokemon').select('id').limit(1).then(function(r){
     btn.textContent='接続する';btn.disabled=false;
     if(r.error){err.textContent='接続失敗: '+r.error.message;err.style.display='block';return;}
