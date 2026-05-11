@@ -1045,62 +1045,91 @@ function delBattle(id){
 // ===== 選出・初手カード =====
 function renderSelectionCard(){
   var sc=g('selection-card');
-  var hasParty=tMP.filter(Boolean).length>0||tOP.length>0;
+  var myPokes=tMP.filter(Boolean);
+  var hasParty=myPokes.length>0||tOP.length>0;
   sc.style.display=hasParty?'block':'none';
   if(!hasParty)return;
-  // 自パーティ選出チェックボックス
-  var myList=g('my-select-list');
-  var myPokes=tMP.filter(Boolean);
-  myList.innerHTML=myPokes.map(function(p,i){
-    return '<div class="sel-item" id="my-sel-item-'+i+'"><input type="checkbox" id="my-sel-'+i+'" name="my-select" value="'+i+'" onchange="onSelChange('my','+i+')"><label for="my-sel-'+i+'">'+p.name+'</label></div>';
-  }).join('');
-  // 自パーティ初手ラジオ（選出されたもののみ）
+  buildSelList(g('my-select-list'), myPokes, 'my');
+  buildSelList(g('opp-select-list'), tOP, 'opp');
   renderLeadRadio('my');
-  // 相手選出
-  var oppList=g('opp-select-list');
-  oppList.innerHTML=tOP.map(function(p,i){
-    return '<div class="sel-item" id="opp-sel-item-'+i+'"><input type="checkbox" id="opp-sel-'+i+'" name="opp-select" value="'+i+'" onchange="onSelChange('opp','+i+')"><label for="opp-sel-'+i+'">'+p.name+'</label></div>';
-  }).join('');
   renderLeadRadio('opp');
+}
+
+function buildSelList(container, pokes, side){
+  while(container.firstChild) container.removeChild(container.firstChild);
+  pokes.forEach(function(p, i){
+    var wrap = document.createElement('div');
+    wrap.className = 'sel-item';
+    wrap.id = side+'-sel-item-'+i;
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = side+'-sel-'+i;
+    cb.name = side+'-select';
+    cb.value = String(i);
+    cb.addEventListener('change', function(){ onSelChange(side, i); });
+    var lbl = document.createElement('label');
+    lbl.setAttribute('for', side+'-sel-'+i);
+    lbl.textContent = p.name;
+    wrap.appendChild(cb);
+    wrap.appendChild(lbl);
+    container.appendChild(wrap);
+  });
 }
 
 function onSelChange(side,idx){
   var checkboxes=document.querySelectorAll('input[name="'+side+'-select"]:checked');
-  // 3体超えたら今チェックしたものを外す
   if(checkboxes.length>3){
     document.getElementById(side+'-sel-'+idx).checked=false;
     toast('選出は3体までです');
     return;
   }
-  // チェック済みのスタイル更新
   var all=document.querySelectorAll('input[name="'+side+'-select"]');
   all.forEach(function(cb){
     var item=document.getElementById(side+'-sel-item-'+cb.value);
-    if(item)item.classList.toggle('checked',cb.checked);
+    if(item) item.classList.toggle('checked',cb.checked);
   });
   renderLeadRadio(side);
 }
 
 function renderLeadRadio(side){
   var leadDiv=g(side+'-lead-list');
+  while(leadDiv.firstChild) leadDiv.removeChild(leadDiv.firstChild);
   var checkboxes=document.querySelectorAll('input[name="'+side+'-select"]:checked');
   var pokes=side==='my'?tMP.filter(Boolean):tOP;
-  if(checkboxes.length===0){leadDiv.innerHTML='<p style="font-size:11px;color:var(--text3);">選出を選んでください</p>';return;}
-  var html='';
+  if(checkboxes.length===0){
+    var msg=document.createElement('p');
+    msg.style.cssText='font-size:11px;color:var(--text3);';
+    msg.textContent='選出を選んでください';
+    leadDiv.appendChild(msg);
+    return;
+  }
   checkboxes.forEach(function(cb){
     var i=parseInt(cb.value);
     var p=pokes[i];
     if(!p)return;
-    html+='<div class="sel-item" id="'+side+'-lead-item-'+i+'"><input type="radio" id="'+side+'-lead-'+i+'" name="'+side+'-lead" value="'+i+'" onchange="onLeadChange(''+side+'','+i+')"><label for="'+side+'-lead-'+i+'">'+p.name+'</label></div>';
+    var wrap=document.createElement('div');
+    wrap.className='sel-item';
+    wrap.id=side+'-lead-item-'+i;
+    var rb=document.createElement('input');
+    rb.type='radio';
+    rb.id=side+'-lead-'+i;
+    rb.name=side+'-lead';
+    rb.value=String(i);
+    rb.addEventListener('change',function(){ onLeadChange(side,i); });
+    var lbl=document.createElement('label');
+    lbl.setAttribute('for',side+'-lead-'+i);
+    lbl.textContent=p.name;
+    wrap.appendChild(rb);
+    wrap.appendChild(lbl);
+    leadDiv.appendChild(wrap);
   });
-  leadDiv.innerHTML=html;
 }
 
 function onLeadChange(side,idx){
   var all=document.querySelectorAll('input[name="'+side+'-lead"]');
   all.forEach(function(rb){
     var item=document.getElementById(side+'-lead-item-'+rb.value);
-    if(item)item.classList.toggle('lead-checked',rb.checked);
+    if(item) item.classList.toggle('lead-checked',rb.checked);
   });
 }
 
