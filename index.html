@@ -447,6 +447,12 @@ body {
 .sel-item.checked { background: var(--accent-bg); border-color: var(--accent); }
 .sel-item.lead-checked { background: #fff8e1; border-color: #f59e0b; }
 .sel-count { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+
+/* ========== 選出タグ（履歴・統計） ========== */
+.poke-tag.selected { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.poke-tag.lead { background: #fff8e1; border-color: #f59e0b; color: #92400e; font-weight: 700; }
+.lead-badge { display: inline-block; font-size: 9px; background: #f59e0b; color: #fff; border-radius: 3px; padding: 0 3px; margin-left: 3px; vertical-align: middle; font-weight: 700; }
+.sel-badge { display: inline-block; font-size: 9px; background: var(--accent); color: #fff; border-radius: 3px; padding: 0 3px; margin-left: 3px; vertical-align: middle; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -584,6 +590,8 @@ body {
       </div>
       <div class="card"><p class="card-title">ランク別成績</p><div id="s-rank"></div></div>
       <div class="card" style="margin-top:10px;"><p class="card-title">よく使うポケモン Top5</p><div id="s-top"></div></div>
+      <div class="card" style="margin-top:10px;"><p class="card-title">選出率 Top5</p><div id="s-selected"></div></div>
+      <div class="card" style="margin-top:10px;"><p class="card-title">初手使用率 Top5</p><div id="s-lead"></div></div>
     </div>
 
   </div><!-- /container -->
@@ -1029,9 +1037,16 @@ function renderHistory(){
     if(!r.data||!r.data.length){d.innerHTML='<div class="empty">対戦記録がありません</div>';return;}
     var h='';
     r.data.forEach(function(b){
-      var my=(b.battle_my_pokemon||[]).sort(function(a,b){return a.slot-b.slot;}),opp=b.battle_opp_pokemon||[];
+      var my=(b.battle_my_pokemon||[]).sort(function(a,b){return a.slot-b.slot;}),opp=(b.battle_opp_pokemon||[]).sort(function(a,b){return a.slot-b.slot;});
       var lbl=b.result==='win'?'勝利':b.result==='lose'?'敗北':'引き分け';
-      h+='<div class="battle-card"><div class="battle-header"><span class="rbadge result-'+b.result+'">'+lbl+'</span><div class="battle-meta"><div class="battle-date">'+b.battle_date+'</div><div class="battle-rank">'+b.rank+'</div></div></div><div class="battle-vs"><div><div class="vs-label">自パーティ</div><div class="poke-tags">'+my.map(function(p){return'<span class="poke-tag">'+p.name+'</span>';}).join('')+'</div></div><div class="vs-sep">vs</div><div><div class="vs-label" style="text-align:right;">相手</div><div class="poke-tags" style="justify-content:flex-end;">'+opp.map(function(p){return'<span class="poke-tag">'+p.name+'</span>';}).join('')+'</div></div></div>'+(b.memo?'<div class="battle-memo">'+b.memo+'</div>':'')+'<div style="margin-top:8px;text-align:right;"><button class="btn btn-sm btn-danger" data-db="'+b.id+'">削除</button></div></div>';
+      function pokeTagHtml(p){
+        var cls='poke-tag'+(p.is_selected?' selected':'');
+        var badge=p.is_lead?'<span class="lead-badge">初手</span>':(p.is_selected?'<span class="sel-badge">選出</span>':'');
+        return'<span class="'+cls+'">'+p.name+badge+'</span>';
+      }
+      var myAll=my.map(pokeTagHtml).join('');
+      var oppAll=opp.map(pokeTagHtml).join('');
+      h+='<div class="battle-card"><div class="battle-header"><span class="rbadge result-'+b.result+'">'+lbl+'</span><div class="battle-meta"><div class="battle-date">'+b.battle_date+'</div><div class="battle-rank">'+b.rank+'</div></div></div><div class="battle-vs"><div><div class="vs-label">自パーティ</div><div class="poke-tags">'+myAll+'</div></div><div class="vs-sep">vs</div><div><div class="vs-label" style="text-align:right;">相手</div><div class="poke-tags" style="justify-content:flex-end;">'+oppAll+'</div></div></div>'+(b.memo?'<div class="battle-memo">'+b.memo+'</div>':'')+'<div style="margin-top:8px;text-align:right;"><button class="btn btn-sm btn-danger" data-db="'+b.id+'">削除</button></div></div>';
     });
     d.innerHTML=h;
     d.querySelectorAll('[data-db]').forEach(function(el){el.addEventListener('click',function(){delBattle(parseInt(el.getAttribute('data-db')));});});
@@ -1057,6 +1072,11 @@ function renderSelectionCard(){
 
 function buildSelList(container, pokes, side){
   while(container.firstChild) container.removeChild(container.firstChild);
+  var countEl = document.createElement('p');
+  countEl.className = 'sel-count';
+  countEl.id = side+'-sel-count';
+  countEl.textContent = '0 / 3 体選択';
+  container.appendChild(countEl);
   pokes.forEach(function(p, i){
     var wrap = document.createElement('div');
     wrap.className = 'sel-item';
@@ -1088,6 +1108,12 @@ function onSelChange(side,idx){
     var item=document.getElementById(side+'-sel-item-'+cb.value);
     if(item) item.classList.toggle('checked',cb.checked);
   });
+  var countEl=document.getElementById(side+'-sel-count');
+  if(countEl){
+    var n=document.querySelectorAll('input[name="'+side+'-select"]:checked').length;
+    countEl.textContent=n+' / 3 体選択';
+    countEl.style.color=n===3?'var(--win)':'var(--text3)';
+  }
   renderLeadRadio(side);
 }
 
@@ -1143,13 +1169,61 @@ function getChecked(name){
 // ===== 統計 =====
 function renderStats(){
   if(!sb)return Promise.resolve();
-  return Promise.all([sb.from('v_win_rate').select('*').single(),sb.from('v_win_rate_by_rank').select('*'),sb.from('v_my_pokemon_usage').select('*')]).then(function(rs){
-    var wv=rs[0].data;
-    if(wv){g('s-total').textContent=wv.total||0;g('s-wins').textContent=wv.wins||0;g('s-rate').textContent=(wv.win_rate_pct||0)+'%';}
-    var rv=rs[1].data||[];
-    g('s-rank').innerHTML=rv.length?rv.map(function(r){return'<div class="rank-row"><span>'+r.rank+'</span><span>'+r.wins+'勝'+r.losses+'敗 ('+r.win_rate_pct+'%)</span></div>';}).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
-    var tv=rs[2].data||[];
-    g('s-top').innerHTML=tv.length?tv.slice(0,5).map(function(r,i){return'<div class="rank-row"><span>'+(i+1)+'. '+r.name+'</span><span style="color:var(--text2);">'+r.usage_count+'回 ('+r.win_rate_pct+'%)</span></div>';}).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+  return Promise.all([
+    sb.from('battles').select('id,result,rank').order('battle_date',{ascending:false}),
+    sb.from('battle_my_pokemon').select('name,is_selected,is_lead,battle_id')
+  ]).then(function(rs){
+    var battles=rs[0].data||[];
+    var myPokes=rs[1].data||[];
+    var total=battles.length;
+    var wins=battles.filter(function(b){return b.result==='win';}).length;
+    var rate=total>0?Math.round(wins/total*100):0;
+    g('s-total').textContent=total;
+    g('s-wins').textContent=wins;
+    g('s-rate').textContent=rate+'%';
+
+    // ランク別
+    var byRank={};
+    battles.forEach(function(b){
+      if(!byRank[b.rank])byRank[b.rank]={wins:0,losses:0};
+      if(b.result==='win')byRank[b.rank].wins++;
+      else if(b.result==='lose')byRank[b.rank].losses++;
+    });
+    var rankKeys=Object.keys(byRank);
+    g('s-rank').innerHTML=rankKeys.length?rankKeys.map(function(r){
+      var d=byRank[r],t=d.wins+d.losses,p=t>0?Math.round(d.wins/t*100):0;
+      return'<div class="rank-row"><span>'+r+'</span><span>'+d.wins+'勝'+d.losses+'敗 ('+p+'%)</span></div>';
+    }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+
+    // 使用ポケモン集計（全スロット）
+    var usage={};
+    myPokes.forEach(function(p){
+      if(!usage[p.name])usage[p.name]={use:0,sel:0,lead:0};
+      usage[p.name].use++;
+      if(p.is_selected)usage[p.name].sel++;
+      if(p.is_lead)usage[p.name].lead++;
+    });
+    var names=Object.keys(usage).sort(function(a,b){return usage[b].use-usage[a].use;});
+
+    // 使用数 Top5
+    g('s-top').innerHTML=names.length?names.slice(0,5).map(function(n,i){
+      return'<div class="rank-row"><span>'+(i+1)+'. '+n+'</span><span style="color:var(--text2);">'+usage[n].use+'回</span></div>';
+    }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+
+    // 選出率 Top5（パーティ入り回数のうち選出された割合）
+    var selNames=Object.keys(usage).filter(function(n){return usage[n].use>0;}).sort(function(a,b){return usage[b].sel-usage[a].sel;});
+    g('s-selected').innerHTML=selNames.length?selNames.slice(0,5).map(function(n,i){
+      var u=usage[n];var p=u.use>0?Math.round(u.sel/u.use*100):0;
+      return'<div class="rank-row"><span>'+(i+1)+'. '+n+'</span><span style="color:var(--text2);">'+u.sel+'回 / '+u.use+'戦 ('+p+'%)</span></div>';
+    }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+
+    // 初手使用率 Top5（選出回数のうち初手になった割合）
+    var leadNames=Object.keys(usage).filter(function(n){return usage[n].sel>0;}).sort(function(a,b){return usage[b].lead-usage[a].lead;});
+    g('s-lead').innerHTML=leadNames.length?leadNames.slice(0,5).map(function(n,i){
+      var u=usage[n];var p=u.sel>0?Math.round(u.lead/u.sel*100):0;
+      return'<div class="rank-row"><span>'+(i+1)+'. '+n+'</span><span style="color:var(--text2);">'+u.lead+'回 / '+u.sel+'選出 ('+p+'%)</span></div>';
+    }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+
   }).catch(function(e){console.error(e);});
 }
 </script>
