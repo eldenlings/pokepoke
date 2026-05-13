@@ -353,25 +353,26 @@ body {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,.18);
-  position: relative;
 }
 .modal-close {
-  position: absolute;
-  top: 12px; right: 12px;
-  width: 28px; height: 28px;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   border: none;
-  background: var(--bg);
-  color: var(--text2);
-  font-size: 16px;
+  background: #fff;
+  color: #333;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  z-index: 9999;
   transition: background .12s, color .12s;
-  flex-shrink: 0;
 }
-.modal-close:hover { background: var(--border); color: var(--text); }
-.modal-title { font-size: 15px; font-weight: 700; margin-bottom: 1rem; padding-right: 32px; }
+.modal-close:hover { background: var(--bg); color: var(--text); }
+.modal-title { font-size: 15px; font-weight: 700; margin-bottom: 1rem; }
 .pick-box {
   background: var(--surface);
   border-radius: 14px;
@@ -684,7 +685,6 @@ body {
 <!-- パーティモーダル -->
 <div class="modal-overlay" id="modal-party" style="z-index:200;">
   <div class="modal-box">
-    <button class="modal-close" id="btn-close-party" title="閉じる">✕</button>
     <p class="modal-title" id="modal-party-title">パーティを登録</p>
     <div class="form-row"><label>パーティ名</label><input id="pm-name" placeholder="例: 受けループ"></div>
     <p style="font-size:12px;color:var(--text3);margin-bottom:8px;">ポケモン（最大6体） — スロットをタップして図鑑から選択</p>
@@ -698,8 +698,7 @@ body {
 
 <!-- ポケモン選択モーダル -->
 <div class="modal-overlay" id="modal-pick" style="z-index:300;">
-  <div class="pick-box" style="position:relative;">
-    <button class="modal-close" id="btn-close-pick" title="閉じる">✕</button>
+  <div class="pick-box">
     <p class="modal-title">ポケモンを選択</p>
     <input class="search-box" id="pick-search" placeholder="🔍 名前で検索...">
     <div id="pick-list"></div>
@@ -710,7 +709,6 @@ body {
 <!-- ポケモン編集モーダル -->
 <div class="modal-overlay" id="modal-poke" style="z-index:400;">
   <div class="modal-box">
-    <button class="modal-close" id="btn-close-poke" title="閉じる">✕</button>
     <p class="modal-title" id="modal-poke-title">ポケモンを登録</p>
     <div class="form-row"><label>名前</label><input id="m-name" placeholder="例: ガブリアス"></div>
 
@@ -768,7 +766,6 @@ body {
 <!-- タグ編集モーダル -->
 <div class="modal-overlay" id="modal-tag" style="z-index:500;">
   <div class="modal-box">
-    <button class="modal-close" id="btn-close-tag" title="閉じる">✕</button>
     <p class="modal-title">タグを編集</p>
     <div class="tag-area" id="modal-tag-area"></div>
     <div class="tag-input-row">
@@ -784,6 +781,8 @@ body {
 
 <div class="toast" id="toast"></div>
 <div class="loading-overlay" id="loading">処理中...</div>
+<!-- グローバル×ボタン（モーダル外・画面右上固定） -->
+<button class="modal-close" id="btn-modal-close-global" style="display:none;" title="閉じる">✕</button>
 
 <script>
 // ===== 定数 =====
@@ -804,6 +803,21 @@ var pickCb=null;
 var battleTagIds=[];      // 対戦記録フォームで選択中のtag id
 var editTagBattleId=null; // タグ編集モーダルで対象のbattle id
 var editTagIds=[];        // タグ編集モーダルで選択中のtag id
+
+// ===== グローバル×ボタン =====
+var activeModalId=null;
+function showGlobalClose(modalId){
+  activeModalId=modalId;
+  g('btn-modal-close-global').style.display='flex';
+}
+function hideGlobalClose(){
+  activeModalId=null;
+  g('btn-modal-close-global').style.display='none';
+}
+function closeActiveModal(){
+  if(activeModalId)g(activeModalId).classList.remove('show');
+  hideGlobalClose();
+}
 
 // ===== ユーティリティ =====
 function g(id){return document.getElementById(id);}
@@ -974,17 +988,18 @@ function bindAll(){
     }).catch(function(e){toast('追加失敗: '+e.message,4000);}).then(function(){load(false);});
   });
   g('settings-tag-input').addEventListener('keydown',function(e){if(e.key==='Enter'){g('btn-settings-add-tag').click();}});
-  g('btn-cancel-party').addEventListener('click',function(){g('modal-party').classList.remove('show');});
-  g('btn-close-party').addEventListener('click',function(){g('modal-party').classList.remove('show');});
+  g('btn-cancel-party').addEventListener('click',function(){g('modal-party').classList.remove('show');hideGlobalClose();});
+  g('btn-close-party').addEventListener('click',function(){g('modal-party').classList.remove('show');hideGlobalClose();});
   g('btn-save-party').addEventListener('click',saveParty);
-  g('btn-cancel-pick').addEventListener('click',function(){g('modal-pick').classList.remove('show');});
-  g('btn-close-pick').addEventListener('click',function(){g('modal-pick').classList.remove('show');});
+  g('btn-cancel-pick').addEventListener('click',function(){g('modal-pick').classList.remove('show');hideGlobalClose();});
+  g('btn-close-pick').addEventListener('click',function(){g('modal-pick').classList.remove('show');hideGlobalClose();});
   g('pick-search').addEventListener('input',renderPickList);
-  g('btn-cancel-poke').addEventListener('click',function(){g('modal-poke').classList.remove('show');});
-  g('btn-close-poke').addEventListener('click',function(){g('modal-poke').classList.remove('show');});
+  g('btn-cancel-poke').addEventListener('click',function(){g('modal-poke').classList.remove('show');hideGlobalClose();});
+  g('btn-close-poke').addEventListener('click',function(){g('modal-poke').classList.remove('show');hideGlobalClose();});
   g('btn-save-poke').addEventListener('click',savePoke);
-  g('btn-cancel-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');});
-  g('btn-close-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');});
+  g('btn-cancel-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');hideGlobalClose();});
+  g('btn-close-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');hideGlobalClose();});
+  g('btn-modal-close-global').addEventListener('click',closeActiveModal);
   g('m-nature').addEventListener('change',updNH);
   EK.forEach(function(k){g('bs-'+k).addEventListener('input',updBs);g('ev-'+k).addEventListener('input',updEv);});
 }
@@ -1072,7 +1087,7 @@ function openTagModal(battleId, currentTagIds){
   editTagIds=currentTagIds.slice();
   renderModalTagArea();
   g('modal-tag-input').value='';
-  g('modal-tag').classList.add('show');
+  g('modal-tag').classList.add('show');showGlobalClose('modal-tag');
 }
 function renderModalTagArea(){
   var area=g('modal-tag-area');
@@ -1098,7 +1113,7 @@ function saveTagEdit(){
     if(!editTagIds.length)return;
     return sb.from('battle_tags').insert(editTagIds.map(function(tid){return{battle_id:editTagBattleId,tag_id:tid};}));
   }).then(function(r){if(r&&r.error)throw r.error;})
-  .then(function(){g('modal-tag').classList.remove('show');toast('タグを保存しました');return renderHistory();})
+  .then(function(){g('modal-tag').classList.remove('show');hideGlobalClose();toast('タグを保存しました');return renderHistory();})
   .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
@@ -1164,7 +1179,7 @@ function openPartyModal(idx){
   tPP=p?p.pokes.slice():[];
   g('pm-name').value=p?p.name:'';
   g('modal-party-title').textContent=p?'パーティを編集':'パーティを登録';
-  renderPmSlots();g('modal-party').classList.add('show');
+  renderPmSlots();g('modal-party').classList.add('show');showGlobalClose('modal-party');
 }
 function renderPmSlots(){
   var d=g('pm-slots'),h='';
@@ -1189,7 +1204,7 @@ function saveParty(){
   }
   pr.then(function(pid){return sb.from('party_members').insert(pokes.map(function(p,i){return{party_id:pid,pokemon_id:p.id,slot:i+1};}));})
   .then(function(r){if(r&&r.error)throw r.error;return loadParties();})
-  .then(function(){renderParties();renderPartySelect();g('modal-party').classList.remove('show');toast('パーティを保存しました');})
+  .then(function(){renderParties();renderPartySelect();g('modal-party').classList.remove('show');hideGlobalClose();toast('パーティを保存しました');})
   .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 function delParty(i){
@@ -1239,7 +1254,7 @@ function openPokeModal(ctx,id){
   updNH();
   var titles={dex:'ポケモンを登録',my:'自パーティに追加',opp:'相手ポケモンを追加（相手）',party:'パーティに追加'};
   g('modal-poke-title').textContent=p?'ポケモンを編集':(titles[ctx]||'ポケモンを追加');
-  g('modal-poke').classList.add('show');
+  g('modal-poke').classList.add('show');showGlobalClose('modal-poke');
 }
 function savePoke(){
   var name=g('m-name').value.trim();if(!name){toast('名前を入力してください');return;}
@@ -1250,7 +1265,7 @@ function savePoke(){
   if(mCtx==='dex'){
     load(true);
     var pr=(mId!==null)?sb.from('pokemon').update(Object.assign({},row,{updated_at:new Date().toISOString()})).eq('id',mId):sb.from('pokemon').insert(row);
-    pr.then(function(r){if(r.error)throw r.error;return loadDex();}).then(function(){renderDex();g('modal-poke').classList.remove('show');toast('保存しました');}).catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
+    pr.then(function(r){if(r.error)throw r.error;return loadDex();}).then(function(){renderDex();g('modal-poke').classList.remove('show');hideGlobalClose();toast('保存しました');}).catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
   }else{
     var pk=Object.assign({},row,{id:null});
     if(mCtx==='my'){if(mId!==null)tMP[mId]=pk;else{var fi=tMP.findIndex(function(x){return!x;});if(fi>=0)tMP[fi]=pk;else if(tMP.length<6)tMP.push(pk);}renderMySlots();}
@@ -1261,7 +1276,7 @@ function savePoke(){
 }
 
 // ===== ピック =====
-function openPickModal(cb){pickCb=cb;g('pick-search').value='';renderPickList();g('modal-pick').classList.add('show');}
+function openPickModal(cb){pickCb=cb;g('pick-search').value='';renderPickList();g('modal-pick').classList.add('show');showGlobalClose('modal-pick');}
 function renderPickList(){
   var q=(g('pick-search').value||'').toLowerCase();
   var list=cache.dex.filter(function(p){return p.name.toLowerCase().indexOf(q)>=0;});
@@ -1275,7 +1290,7 @@ function renderPickList(){
     h+='<div class="pick-item" data-pid="'+p.id+'"><div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-size:13px;font-weight:700;">'+p.name+'</span>'+(p.nature?'<span style="font-size:11px;color:var(--text2);">'+p.nature+'</span>':'')+hint+'</div>'+(bst?'<span style="font-size:11px;color:var(--text3);">合計種族値 '+bst+'</span>':'')+'</div><span style="font-size:12px;color:var(--text3);">選択 ›</span></div>';
   });
   d.innerHTML=h;
-  d.querySelectorAll('[data-pid]').forEach(function(el){el.addEventListener('click',function(){var id=parseInt(el.getAttribute('data-pid'));if(pickCb)pickCb(cache.dex.find(function(p){return p.id===id;}));g('modal-pick').classList.remove('show');});});
+  d.querySelectorAll('[data-pid]').forEach(function(el){el.addEventListener('click',function(){var id=parseInt(el.getAttribute('data-pid'));if(pickCb)pickCb(cache.dex.find(function(p){return p.id===id;}));g('modal-pick').classList.remove('show');hideGlobalClose();});});
 }
 
 // ===== 履歴 =====
