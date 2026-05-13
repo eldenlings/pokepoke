@@ -818,6 +818,8 @@ function closeActiveModal(){
   if(activeModalId)g(activeModalId).classList.remove('show');
   hideGlobalClose();
 }
+// ×ボタンはbindAll()を待たず即バインド
+document.getElementById('btn-modal-close-global').addEventListener('click',closeActiveModal);
 
 // ===== ユーティリティ =====
 function g(id){return document.getElementById(id);}
@@ -999,7 +1001,6 @@ function bindAll(){
   g('btn-save-poke').addEventListener('click',savePoke);
   g('btn-cancel-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');hideGlobalClose();});
   g('btn-close-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');hideGlobalClose();});
-  g('btn-modal-close-global').addEventListener('click',closeActiveModal);
   g('m-nature').addEventListener('change',updNH);
   EK.forEach(function(k){g('bs-'+k).addEventListener('input',updBs);g('ev-'+k).addEventListener('input',updEv);});
 }
