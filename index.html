@@ -453,6 +453,49 @@ body {
 .poke-tag.lead { background: #fff8e1; border-color: #f59e0b; color: #92400e; font-weight: 700; }
 .lead-badge { display: inline-block; font-size: 9px; background: #f59e0b; color: #fff; border-radius: 3px; padding: 0 3px; margin-left: 3px; vertical-align: middle; font-weight: 700; }
 .sel-badge { display: inline-block; font-size: 9px; background: var(--accent); color: #fff; border-radius: 3px; padding: 0 3px; margin-left: 3px; vertical-align: middle; font-weight: 700; }
+
+/* ========== タグ ========== */
+.tag-area { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.btag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  user-select: none;
+}
+.btag:hover { border-color: var(--accent); color: var(--accent); }
+.btag.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btag-del { font-size: 11px; opacity: .7; margin-left: 2px; }
+.btag-del:hover { opacity: 1; }
+.tag-input-row { display: flex; gap: 6px; margin-top: 4px; }
+.tag-input-row input { flex: 1; padding: 6px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-family: inherit; outline: none; }
+.tag-input-row input:focus { border-color: var(--accent); }
+.tag-input-row button { padding: 6px 12px; font-size: 12px; }
+.history-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.htag { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 500; background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent); }
+.htag-edit { font-size: 11px; color: var(--text3); cursor: pointer; margin-left: auto; padding: 2px 0; }
+.htag-edit:hover { color: var(--accent); }
+/* ========== 設定：タグ管理 ========== */
+.stag-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.stag-row:last-child { border-bottom: none; }
+.stag-name-input {
+  flex: 1; padding: 5px 8px; font-size: 13px; font-weight: 500;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text); font-family: inherit;
+  outline: none; transition: border-color .15s, background .15s;
+  min-width: 0;
+}
+.stag-name-input:hover { border-color: var(--border); background: var(--bg); }
+.stag-name-input:focus { border-color: var(--accent); background: var(--bg); box-shadow: 0 0 0 3px rgba(45,91,227,.1); }
+.stag-count { font-size: 11px; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
+.stag-save { padding: 4px 10px; font-size: 11px; display: none; }
+.stag-name-input:focus ~ .stag-save,
+.stag-name-input.dirty ~ .stag-save { display: inline-flex; }
+.stag-del { color: var(--lose); border-color: var(--lose); flex-shrink: 0; }
+.stag-del:hover { background: var(--lose-bg); }
 </style>
 </head>
 <body>
@@ -493,6 +536,7 @@ body {
     <button class="tab" data-tab="pokedex">ポケモン登録</button>
     <button class="tab" data-tab="history">履歴</button>
     <button class="tab" data-tab="stats">統計</button>
+    <button class="tab" data-tab="settings">設定</button>
   </div>
 
   <div class="container">
@@ -544,6 +588,14 @@ body {
           <select id="battle-rank"><option>マスターボール級</option><option>ハイパーボール級</option><option>スーパーボール級</option><option>モンスターボール級</option></select>
         </div>
         <div class="form-row"><label>メモ</label><textarea id="battle-memo" placeholder="対戦のメモ..."></textarea></div>
+        <div class="form-row">
+          <label>タグ</label>
+          <div class="tag-area" id="battle-tag-area"></div>
+          <div class="tag-input-row">
+            <input id="battle-tag-input" placeholder="タグを追加..." maxlength="20">
+            <button class="btn btn-sm" id="btn-add-tag">追加</button>
+          </div>
+        </div>
       </div>
       <button class="btn btn-primary btn-block" id="btn-save-battle">対戦を保存</button>
       <div style="height:16px;"></div>
@@ -576,6 +628,7 @@ body {
       <div class="filter-row">
         <select id="filter-result"><option value="">全て</option><option value="win">勝利</option><option value="lose">敗北</option><option value="draw">引き分け</option></select>
         <select id="filter-rank"><option value="">全ランク</option><option>マスターボール級</option><option>ハイパーボール級</option><option>スーパーボール級</option><option>モンスターボール級</option></select>
+        <select id="filter-tag"><option value="">全タグ</option></select>
       </div>
       <div id="history-list"></div>
     </div>
@@ -592,6 +645,20 @@ body {
       <div class="card" style="margin-top:10px;"><p class="card-title">よく使うポケモン Top5</p><div id="s-top"></div></div>
       <div class="card" style="margin-top:10px;"><p class="card-title">選出率 Top5</p><div id="s-selected"></div></div>
       <div class="card" style="margin-top:10px;"><p class="card-title">初手使用率 Top5</p><div id="s-lead"></div></div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="tab-settings" class="section">
+      <div style="height:12px;"></div>
+      <div class="card">
+        <p class="card-title">タグ管理</p>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">対戦記録に付けるタグを管理します。名前をタップして編集できます。</p>
+        <div id="settings-tag-list"></div>
+        <div class="tag-input-row" style="margin-top:12px;">
+          <input id="settings-tag-input" placeholder="新しいタグ名..." maxlength="20">
+          <button class="btn btn-sm btn-primary" id="btn-settings-add-tag">追加</button>
+        </div>
+      </div>
     </div>
 
   </div><!-- /container -->
@@ -678,6 +745,22 @@ body {
   </div>
 </div>
 
+<!-- タグ編集モーダル -->
+<div class="modal-overlay" id="modal-tag" style="z-index:500;">
+  <div class="modal-box">
+    <p class="modal-title">タグを編集</p>
+    <div class="tag-area" id="modal-tag-area"></div>
+    <div class="tag-input-row">
+      <input id="modal-tag-input" placeholder="タグを追加..." maxlength="20">
+      <button class="btn btn-sm" id="btn-modal-add-tag">追加</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" id="btn-cancel-tag" style="flex:1;">キャンセル</button>
+      <button class="btn btn-primary" id="btn-save-tag" style="flex:1;">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div class="loading-overlay" id="loading">処理中...</div>
 
@@ -690,12 +773,16 @@ var EK=['hp','atk','def','spa','spd','spe'];
 var SL={hp:'H',atk:'A',def:'B',spa:'C',spd:'D',spe:'S'};
 var BC={hp:'#4caf50',atk:'#f44336',def:'#ff9800',spa:'#2196f3',spd:'#9c27b0',spe:'#00bcd4'};
 var SCHEMA='public';
+var PRESET_TAGS=['立ち回り','選出','初手','構築'];
 
 // ===== 状態 =====
-var sb=null,cache={dex:[],parties:[]};
+var sb=null,cache={dex:[],parties:[],tags:[]};
 var mCtx=null,mId=null,pEIdx=null;
 var tPP=[],tMP=[],tOP=[];
 var pickCb=null;
+var battleTagIds=[];      // 対戦記録フォームで選択中のtag id
+var editTagBattleId=null; // タグ編集モーダルで対象のbattle id
+var editTagIds=[];        // タグ編集モーダルで選択中のtag id
 
 // ===== ユーティリティ =====
 function g(id){return document.getElementById(id);}
@@ -800,6 +887,7 @@ function bindAll(){
       el.classList.add('active');g('tab-'+t).classList.add('active');
       if(t==='stats')renderStats();
       if(t==='history')renderHistory();
+      if(t==='settings')renderSettingsTags();
     });
   });
   g('sel-party').addEventListener('change',function(){
@@ -817,6 +905,55 @@ function bindAll(){
   g('dex-search').addEventListener('input',renderDex);
   g('filter-result').addEventListener('change',renderHistory);
   g('filter-rank').addEventListener('change',renderHistory);
+  g('filter-tag').addEventListener('change',renderHistory);
+  // 対戦記録タグ追加
+  g('btn-add-tag').addEventListener('click',function(){
+    var inp=g('battle-tag-input');
+    var name=inp.value.trim();
+    if(!name)return;
+    var existing=cache.tags.find(function(t){return t.name===name;});
+    if(existing){
+      if(battleTagIds.indexOf(existing.id)<0)battleTagIds.push(existing.id);
+      renderBattleTagArea();inp.value='';
+    }else{
+      addTagGlobal(name,function(id){battleTagIds.push(id);renderBattleTagArea();});
+      inp.value='';
+    }
+  });
+  g('battle-tag-input').addEventListener('keydown',function(e){if(e.key==='Enter'){g('btn-add-tag').click();}});
+  // タグ編集モーダル
+  g('btn-cancel-tag').addEventListener('click',function(){g('modal-tag').classList.remove('show');});
+  g('btn-save-tag').addEventListener('click',saveTagEdit);
+  g('btn-modal-add-tag').addEventListener('click',function(){
+    var inp=g('modal-tag-input');
+    var name=inp.value.trim();
+    if(!name)return;
+    var existing=cache.tags.find(function(t){return t.name===name;});
+    if(existing){
+      if(editTagIds.indexOf(existing.id)<0)editTagIds.push(existing.id);
+      renderModalTagArea();inp.value='';
+    }else{
+      addTagGlobal(name,function(id){editTagIds.push(id);renderModalTagArea();});
+      inp.value='';
+    }
+  });
+  g('modal-tag-input').addEventListener('keydown',function(e){if(e.key==='Enter'){g('btn-modal-add-tag').click();}});
+  // 設定タブ
+  g('btn-settings-add-tag').addEventListener('click',function(){
+    var inp=g('settings-tag-input');
+    var name=inp.value.trim();
+    if(!name)return;
+    if(cache.tags.find(function(t){return t.name===name;})){toast('同名のタグが既にあります');return;}
+    load(true);
+    sb.from('tags').insert({name:name}).select().single().then(function(r){
+      if(r.error)throw r.error;
+      cache.tags.push(r.data);
+      inp.value='';
+      renderSettingsTags();renderBattleTagArea();updateTagFilter();
+      toast('タグを追加しました');
+    }).catch(function(e){toast('追加失敗: '+e.message,4000);}).then(function(){load(false);});
+  });
+  g('settings-tag-input').addEventListener('keydown',function(e){if(e.key==='Enter'){g('btn-settings-add-tag').click();}});
   g('btn-cancel-party').addEventListener('click',function(){g('modal-party').classList.remove('show');});
   g('btn-save-party').addEventListener('click',saveParty);
   g('btn-cancel-pick').addEventListener('click',function(){g('modal-pick').classList.remove('show');});
@@ -839,8 +976,8 @@ g('btn-connect').addEventListener('click',doConnect);
 // ===== データ読み込み =====
 function loadAll(){
   load(true);
-  Promise.all([loadDex(),loadParties()]).then(function(){
-    renderMySlots();renderPartySelect();renderParties();renderDex();return renderHistory();
+  Promise.all([loadDex(),loadParties(),loadTags()]).then(function(){
+    renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
   }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
 }
 function loadDex(){return sb.from('pokemon').select('*').order('id').then(function(r){if(r.error)throw r.error;cache.dex=r.data||[];});}
@@ -849,6 +986,95 @@ function loadParties(){
     var parties=rs[0].data||[],members=rs[1].data||[];
     cache.parties=parties.map(function(p){return Object.assign({},p,{pokes:members.filter(function(m){return m.party_id===p.id;}).sort(function(a,b){return a.slot-b.slot;}).map(function(m){return m.pokemon;})});});
   });
+}
+function loadTags(){
+  return sb.from('tags').select('*').order('id').then(function(r){
+    if(r.error){cache.tags=[];return;}
+    cache.tags=r.data||[];
+    // プリセットが未登録なら自動挿入
+    var existing=cache.tags.map(function(t){return t.name;});
+    var missing=PRESET_TAGS.filter(function(n){return existing.indexOf(n)<0;});
+    if(!missing.length)return;
+    return sb.from('tags').insert(missing.map(function(n){return{name:n};})).then(function(){
+      return sb.from('tags').select('*').order('id').then(function(r2){if(!r2.error)cache.tags=r2.data||[];});
+    });
+  });
+}
+
+// ===== タグUI =====
+function renderBattleTagArea(){
+  var area=g('battle-tag-area');
+  if(!area)return;
+  area.innerHTML='';
+  cache.tags.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.className='btag'+(battleTagIds.indexOf(t.id)>=0?' active':'');
+    btn.textContent=t.name;
+    btn.setAttribute('data-tid',t.id);
+    btn.addEventListener('click',function(){toggleBattleTag(t.id,btn);});
+    area.appendChild(btn);
+  });
+}
+function toggleBattleTag(tid,btn){
+  var idx=battleTagIds.indexOf(tid);
+  if(idx>=0){battleTagIds.splice(idx,1);btn.classList.remove('active');}
+  else{battleTagIds.push(tid);btn.classList.add('active');}
+}
+function addTagGlobal(name,cb){
+  name=name.trim();
+  if(!name)return;
+  if(cache.tags.find(function(t){return t.name===name;})){toast('同名のタグが既にあります');return;}
+  sb.from('tags').insert({name:name}).select().single().then(function(r){
+    if(r.error){toast('タグ追加失敗: '+r.error.message,4000);return;}
+    cache.tags.push(r.data);
+    if(cb)cb(r.data.id);
+    renderBattleTagArea();
+    updateTagFilter();
+  });
+}
+function updateTagFilter(){
+  var sel=g('filter-tag');
+  var prev=sel.value;
+  var h='<option value="">全タグ</option>';
+  cache.tags.forEach(function(t){h+='<option value="'+t.id+'">'+t.name+'</option>';});
+  sel.innerHTML=h;
+  sel.value=prev;
+}
+
+// タグ編集モーダル
+function openTagModal(battleId, currentTagIds){
+  editTagBattleId=battleId;
+  editTagIds=currentTagIds.slice();
+  renderModalTagArea();
+  g('modal-tag-input').value='';
+  g('modal-tag').classList.add('show');
+}
+function renderModalTagArea(){
+  var area=g('modal-tag-area');
+  area.innerHTML='';
+  cache.tags.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.className='btag'+(editTagIds.indexOf(t.id)>=0?' active':'');
+    btn.textContent=t.name;
+    btn.setAttribute('data-tid',t.id);
+    btn.addEventListener('click',function(){
+      var idx=editTagIds.indexOf(t.id);
+      if(idx>=0){editTagIds.splice(idx,1);btn.classList.remove('active');}
+      else{editTagIds.push(t.id);btn.classList.add('active');}
+    });
+    area.appendChild(btn);
+  });
+}
+function saveTagEdit(){
+  if(!editTagBattleId)return;
+  load(true);
+  sb.from('battle_tags').delete().eq('battle_id',editTagBattleId).then(function(r){
+    if(r.error)throw r.error;
+    if(!editTagIds.length)return;
+    return sb.from('battle_tags').insert(editTagIds.map(function(tid){return{battle_id:editTagBattleId,tag_id:tid};}));
+  }).then(function(r){if(r&&r.error)throw r.error;})
+  .then(function(){g('modal-tag').classList.remove('show');toast('タグを保存しました');return renderHistory();})
+  .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
 // ===== 対戦記録 =====
@@ -888,8 +1114,9 @@ function saveBattle(){
     var ins=[];
     if(my.length)ins.push(sb.from('battle_my_pokemon').insert(my.map(function(p,i){return mkR(p,i,mySelected,myLead);})));
     if(tOP.length)ins.push(sb.from('battle_opp_pokemon').insert(tOP.map(function(p,i){return mkR(p,i,oppSelected,oppLead);})));
+    if(battleTagIds.length)ins.push(sb.from('battle_tags').insert(battleTagIds.map(function(tid){return{battle_id:bid,tag_id:tid};})));
     return Promise.all(ins);
-  }).then(function(){tMP=[];tOP=[];g('battle-memo').value='';g('sel-party').value='';renderMySlots();renderSelectionCard();toast('対戦を記録しました！');})
+  }).then(function(){tMP=[];tOP=[];battleTagIds=[];g('battle-memo').value='';g('sel-party').value='';renderMySlots();renderSelectionCard();renderBattleTagArea();toast('対戦を記録しました！');})
   .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
@@ -1029,14 +1256,19 @@ function renderPickList(){
 // ===== 履歴 =====
 function renderHistory(){
   var d=g('history-list');if(!d||!sb)return Promise.resolve();
-  var rf=g('filter-result').value,rnk=g('filter-rank').value;
-  var q=sb.from('battles').select('*,battle_my_pokemon(*),battle_opp_pokemon(*)').order('battle_date',{ascending:false}).order('id',{ascending:false}).limit(50);
+  var rf=g('filter-result').value,rnk=g('filter-rank').value,rtag=g('filter-tag').value;
+  updateTagFilter();
+  var q=sb.from('battles').select('*,battle_my_pokemon(*),battle_opp_pokemon(*),battle_tags(tag_id,tags(id,name))').order('battle_date',{ascending:false}).order('id',{ascending:false}).limit(50);
   if(rf)q=q.eq('result',rf);if(rnk)q=q.eq('rank',rnk);
   return q.then(function(r){
     if(r.error){d.innerHTML='<div class="empty">読込エラー: '+r.error.message+'</div>';return;}
     if(!r.data||!r.data.length){d.innerHTML='<div class="empty">対戦記録がありません</div>';return;}
+    var battles=r.data;
+    // タグフィルター（クライアント側）
+    if(rtag){battles=battles.filter(function(b){return(b.battle_tags||[]).some(function(bt){return String(bt.tag_id)===String(rtag);});});}
+    if(!battles.length){d.innerHTML='<div class="empty">対戦記録がありません</div>';return;}
     var h='';
-    r.data.forEach(function(b){
+    battles.forEach(function(b){
       var my=(b.battle_my_pokemon||[]).sort(function(a,b){return a.slot-b.slot;}),opp=(b.battle_opp_pokemon||[]).sort(function(a,b){return a.slot-b.slot;});
       var lbl=b.result==='win'?'勝利':b.result==='lose'?'敗北':'引き分け';
       function pokeTagHtml(p){
@@ -1046,10 +1278,26 @@ function renderHistory(){
       }
       var myAll=my.map(pokeTagHtml).join('');
       var oppAll=opp.map(pokeTagHtml).join('');
-      h+='<div class="battle-card"><div class="battle-header"><span class="rbadge result-'+b.result+'">'+lbl+'</span><div class="battle-meta"><div class="battle-date">'+b.battle_date+'</div><div class="battle-rank">'+b.rank+'</div></div></div><div class="battle-vs"><div><div class="vs-label">自パーティ</div><div class="poke-tags">'+myAll+'</div></div><div class="vs-sep">vs</div><div><div class="vs-label" style="text-align:right;">相手</div><div class="poke-tags" style="justify-content:flex-end;">'+oppAll+'</div></div></div>'+(b.memo?'<div class="battle-memo">'+b.memo+'</div>':'')+'<div style="margin-top:8px;text-align:right;"><button class="btn btn-sm btn-danger" data-db="'+b.id+'">削除</button></div></div>';
+      var bTags=(b.battle_tags||[]).map(function(bt){return bt.tags;}).filter(Boolean);
+      var tagHtml=bTags.length?bTags.map(function(t){return'<span class="htag">'+t.name+'</span>';}).join(''):'';
+      var tagIds=bTags.map(function(t){return t.id;});
+      h+='<div class="battle-card">'
+        +'<div class="battle-header"><span class="rbadge result-'+b.result+'">'+lbl+'</span><div class="battle-meta"><div class="battle-date">'+b.battle_date+'</div><div class="battle-rank">'+b.rank+'</div></div></div>'
+        +'<div class="battle-vs"><div><div class="vs-label">自パーティ</div><div class="poke-tags">'+myAll+'</div></div><div class="vs-sep">vs</div><div><div class="vs-label" style="text-align:right;">相手</div><div class="poke-tags" style="justify-content:flex-end;">'+oppAll+'</div></div></div>'
+        +(b.memo?'<div class="battle-memo">'+b.memo+'</div>':'')
+        +'<div class="history-tags">'+tagHtml+'<span class="htag-edit" data-bid="'+b.id+'" data-tids="'+tagIds.join(',')+'">🏷 タグ編集</span></div>'
+        +'<div style="margin-top:8px;text-align:right;"><button class="btn btn-sm btn-danger" data-db="'+b.id+'">削除</button></div>'
+        +'</div>';
     });
     d.innerHTML=h;
     d.querySelectorAll('[data-db]').forEach(function(el){el.addEventListener('click',function(){delBattle(parseInt(el.getAttribute('data-db')));});});
+    d.querySelectorAll('[data-bid]').forEach(function(el){
+      el.addEventListener('click',function(){
+        var bid=parseInt(el.getAttribute('data-bid'));
+        var tids=(el.getAttribute('data-tids')||'').split(',').filter(Boolean).map(Number);
+        openTagModal(bid,tids);
+      });
+    });
   });
 }
 function delBattle(id){
@@ -1164,6 +1412,88 @@ function getChecked(name){
   var vals=[];
   inputs.forEach(function(el){vals.push(parseInt(el.value));});
   return vals;
+}
+
+// ===== 設定：タグ管理 =====
+function renderSettingsTags(){
+  var d=g('settings-tag-list');
+  if(!d)return;
+  if(!cache.tags.length){d.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0;">タグがありません</div>';return;}
+  // 各タグの使用件数を取得してから描画
+  sb.from('battle_tags').select('tag_id').then(function(r){
+    var usageMap={};
+    (r.data||[]).forEach(function(row){usageMap[row.tag_id]=(usageMap[row.tag_id]||0)+1;});
+    d.innerHTML='';
+    cache.tags.forEach(function(t){
+      var count=usageMap[t.id]||0;
+      var row=document.createElement('div');
+      row.className='stag-row';
+      row.innerHTML=
+        '<input class="stag-name-input" data-tid="'+t.id+'" value="'+escHtml(t.name)+'" maxlength="20">'
+        +'<button class="btn btn-sm stag-save" data-tid="'+t.id+'">保存</button>'
+        +'<span class="stag-count">'+count+'件</span>'
+        +'<button class="btn btn-sm btn-danger stag-del" data-tid="'+t.id+'" data-count="'+count+'">削除</button>';
+      d.appendChild(row);
+    });
+    // 名前入力：変更検知で保存ボタン表示
+    d.querySelectorAll('.stag-name-input').forEach(function(inp){
+      var orig=inp.value;
+      inp.addEventListener('input',function(){
+        inp.classList.toggle('dirty',inp.value!==orig);
+        var saveBtn=inp.parentElement.querySelector('.stag-save');
+        if(saveBtn)saveBtn.style.display=(inp.value!==orig)?'inline-flex':'none';
+      });
+      inp.addEventListener('keydown',function(e){if(e.key==='Enter')inp.nextElementSibling.click();});
+    });
+    // 保存ボタン
+    d.querySelectorAll('.stag-save').forEach(function(btn){
+      btn.style.display='none';
+      btn.addEventListener('click',function(){
+        var tid=parseInt(btn.getAttribute('data-tid'));
+        var inp=btn.parentElement.querySelector('.stag-name-input');
+        renameTag(tid,inp.value.trim(),inp);
+      });
+    });
+    // 削除ボタン
+    d.querySelectorAll('.stag-del').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var tid=parseInt(btn.getAttribute('data-tid'));
+        var count=parseInt(btn.getAttribute('data-count'));
+        var tag=cache.tags.find(function(t){return t.id===tid;});
+        var msg=count>0
+          ?'「'+(tag?tag.name:'')+' 」は '+count+' 件の対戦記録で使われています。削除しますか？（対戦記録からも外れます）'
+          :'「'+(tag?tag.name:'')+'」を削除しますか？';
+        if(!confirm(msg))return;
+        deleteTag(tid);
+      });
+    });
+  });
+}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function renameTag(tid,name,inp){
+  if(!name){toast('タグ名を入力してください');return;}
+  if(cache.tags.find(function(t){return t.name===name&&t.id!==tid;})){toast('同名のタグが既にあります');return;}
+  load(true);
+  sb.from('tags').update({name:name}).eq('id',tid).then(function(r){
+    if(r.error)throw r.error;
+    var t=cache.tags.find(function(t){return t.id===tid;});
+    if(t)t.name=name;
+    inp.classList.remove('dirty');
+    var saveBtn=inp.parentElement.querySelector('.stag-save');
+    if(saveBtn)saveBtn.style.display='none';
+    renderBattleTagArea();updateTagFilter();
+    toast('タグ名を変更しました');
+  }).catch(function(e){toast('変更失敗: '+e.message,4000);}).then(function(){load(false);});
+}
+function deleteTag(tid){
+  load(true);
+  sb.from('tags').delete().eq('id',tid).then(function(r){
+    if(r.error)throw r.error;
+    cache.tags=cache.tags.filter(function(t){return t.id!==tid;});
+    battleTagIds=battleTagIds.filter(function(id){return id!==tid;});
+    renderSettingsTags();renderBattleTagArea();updateTagFilter();
+    toast('タグを削除しました');
+  }).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
 // ===== 統計 =====
