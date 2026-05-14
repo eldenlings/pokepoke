@@ -522,6 +522,23 @@ body {
 /* ヘッダーユーザー表示 */
 .user-badge { font-size: 12px; font-weight: 600; color: var(--text2); }
 
+/* パーティ別成績 */
+.party-stat-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.party-stat-row:last-child { border-bottom: none; }
+.party-stat-name { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.party-stat-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.party-stat-bar-bg { flex: 1; height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.party-stat-bar-fill { height: 100%; border-radius: 99px; background: var(--accent); transition: width .4s; }
+.party-stat-nums { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.party-stat-rate { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; min-width: 38px; text-align: right; }
+.party-tag-breakdown { margin-top: 8px; padding: 8px 10px; background: var(--bg); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 4px; }
+.party-tag-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ptag-name { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-bg); border: 1px solid var(--accent); border-radius: 99px; padding: 1px 8px; flex-shrink: 0; }
+.ptag-nums { font-size: 11px; color: var(--text2); }
+
 /* ========== 設定：タグ管理 ========== */
 .stag-row {
   display: flex; align-items: center; gap: 8px;
@@ -709,6 +726,7 @@ body {
       <div class="card" style="margin-top:10px;"><p class="card-title">よく使うポケモン Top5</p><div id="s-top"></div></div>
       <div class="card" style="margin-top:10px;"><p class="card-title">選出率 Top5</p><div id="s-selected"></div></div>
       <div class="card" style="margin-top:10px;"><p class="card-title">初手使用率 Top5</p><div id="s-lead"></div></div>
+      <div class="card" style="margin-top:10px;"><p class="card-title">パーティ別成績</p><div id="s-party"></div></div>
     </div>
 
     <!-- 設定 -->
@@ -1669,7 +1687,7 @@ function deleteTag(tid){
 function renderStats(){
   if(!sb||!currentUser)return Promise.resolve();
   return Promise.all([
-    sb.from('battles').select('id,result,rank').eq('user_id',currentUser.id).order('battle_date',{ascending:false}),
+    sb.from('battles').select('id,result,rank,party_id,battle_tags(tag_id,tags(id,name))').eq('user_id',currentUser.id).order('battle_date',{ascending:false}),
     sb.from('battle_my_pokemon').select('name,is_selected,is_lead,battle_id')
   ]).then(function(rs){
     var battles=rs[0].data||[];
@@ -1721,6 +1739,60 @@ function renderStats(){
     g('s-lead').innerHTML=leadNames.length?leadNames.slice(0,5).map(function(n,i){
       var u=usage[n];var p=u.sel>0?Math.round(u.lead/u.sel*100):0;
       return'<div class="rank-row"><span>'+(i+1)+'. '+n+'</span><span style="color:var(--text2);">'+u.lead+'回 / '+u.sel+'選出 ('+p+'%)</span></div>';
+    }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
+
+    // パーティ別成績（タグ別内訳付き）
+    var partyMap={};
+    battles.forEach(function(b){
+      var pid=b.party_id;
+      if(!pid)return;
+      if(!partyMap[pid])partyMap[pid]={wins:0,losses:0,draws:0,tags:{}};
+      if(b.result==='win')partyMap[pid].wins++;
+      else if(b.result==='lose')partyMap[pid].losses++;
+      else partyMap[pid].draws++;
+      // タグ別集計
+      var bTags=(b.battle_tags||[]).map(function(bt){return bt.tags;}).filter(Boolean);
+      bTags.forEach(function(t){
+        if(!partyMap[pid].tags[t.id])partyMap[pid].tags[t.id]={name:t.name,wins:0,losses:0,draws:0};
+        if(b.result==='win')partyMap[pid].tags[t.id].wins++;
+        else if(b.result==='lose')partyMap[pid].tags[t.id].losses++;
+        else partyMap[pid].tags[t.id].draws++;
+      });
+    });
+    var partyKeys=Object.keys(partyMap).sort(function(a,b){
+      var ta=partyMap[a],tb=partyMap[b];
+      return(tb.wins+tb.losses+tb.draws)-(ta.wins+ta.losses+ta.draws);
+    });
+    g('s-party').innerHTML=partyKeys.length?partyKeys.map(function(pid){
+      var d=partyMap[pid];
+      var total=d.wins+d.losses+d.draws;
+      var rate=total>0?Math.round(d.wins/total*100):0;
+      var party=cache.parties.find(function(p){return String(p.id)===String(pid);});
+      var name=party?party.name:'不明なパーティ';
+      var drawTxt=d.draws>0?' '+d.draws+'分':'';
+      // タグ別内訳HTML
+      var tagKeys=Object.keys(d.tags);
+      var tagHtml=tagKeys.length?'<div class="party-tag-breakdown">'
+        +tagKeys.map(function(tid){
+          var t=d.tags[tid];
+          var tt=t.wins+t.losses+t.draws;
+          var tr=tt>0?Math.round(t.wins/tt*100):0;
+          var tdraw=t.draws>0?' '+t.draws+'分':'';
+          return'<div class="party-tag-row">'
+            +'<span class="ptag-name">'+t.name+'</span>'
+            +'<span class="ptag-nums">'+t.wins+'勝'+t.losses+'敗'+tdraw+' ('+tr+'%)</span>'
+            +'</div>';
+        }).join('')
+        +'</div>':'';
+      return'<div class="party-stat-row">'
+        +'<div class="party-stat-name">'+name+'</div>'
+        +'<div class="party-stat-bar-wrap">'
+        +'<div class="party-stat-bar-bg"><div class="party-stat-bar-fill" style="width:'+rate+'%"></div></div>'
+        +'<span class="party-stat-nums">'+d.wins+'勝'+d.losses+'敗'+drawTxt+' / '+total+'戦</span>'
+        +'<span class="party-stat-rate">'+rate+'%</span>'
+        +'</div>'
+        +tagHtml
+        +'</div>';
     }).join(''):'<div style="font-size:13px;color:var(--text3);">データなし</div>';
 
   }).catch(function(e){console.error(e);});
