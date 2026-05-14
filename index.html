@@ -496,7 +496,32 @@ body {
 .htag { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 500; background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent); }
 .htag-edit { font-size: 11px; color: var(--text3); cursor: pointer; margin-left: auto; padding: 2px 0; }
 .htag-edit:hover { color: var(--accent); }
-/* ========== 設定：タグ管理 ========== */
+/* ========== ログインパネル ========== */
+.login-panel {
+  display: none;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.login-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  width: 360px;
+  max-width: 100%;
+  box-shadow: 0 4px 24px rgba(0,0,0,.1);
+}
+.login-card h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.login-card .sub { font-size: 13px; color: var(--text3); margin-bottom: 1.5rem; }
+.login-tabs { display: flex; gap: 0; margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.login-tab { flex: 1; padding: 8px; font-size: 13px; font-weight: 600; border: none; background: transparent; cursor: pointer; color: var(--text2); transition: background .12s, color .12s; }
+.login-tab.active { background: var(--accent); color: #fff; }
+.login-err { font-size: 12px; color: var(--lose); margin-top: 8px; display: none; }
+
+/* ヘッダーユーザー表示 */
+.user-badge { font-size: 12px; font-weight: 600; color: var(--text2); }
+</style>
 .stag-row {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 0; border-bottom: 1px solid var(--border);
@@ -525,7 +550,8 @@ body {
 <header class="header">
   <div class="header-title">⚔ <span>ポケモンチャンピオンズ</span> 対戦トラッカー</div>
   <div class="header-right" id="header-right" style="display:none;">
-    <span class="conn-badge" id="conn-badge">接続中</span>
+    <span class="user-badge" id="user-badge"></span>
+    <button class="btn btn-sm" id="btn-logout">ログアウト</button>
     <button class="btn btn-sm" id="btn-disconnect">切断</button>
   </div>
 </header>
@@ -546,6 +572,22 @@ body {
     <div class="form-row"><label>anon Key</label><input id="sb-key" type="text" placeholder="eyJ..."></div>
     <button class="btn btn-primary btn-block" id="btn-connect">接続する</button>
     <p class="err-msg" id="err-msg"></p>
+  </div>
+</div>
+
+<!-- ログインパネル -->
+<div id="login-panel" style="display:none;min-height:100vh;display:none;align-items:center;justify-content:center;padding:2rem 1rem;">
+  <div class="login-card">
+    <h2>👤 ログイン</h2>
+    <p class="sub">アカウントでサインインしてください</p>
+    <div class="login-tabs">
+      <button class="login-tab active" id="ltab-login">ログイン</button>
+      <button class="login-tab" id="ltab-register">新規登録</button>
+    </div>
+    <div class="form-row"><label>ユーザーID</label><input id="login-username" placeholder="例: ash" autocomplete="username"></div>
+    <div class="form-row"><label>パスワード</label><input id="login-password" type="password" autocomplete="current-password"></div>
+    <button class="btn btn-primary btn-block" id="btn-login" style="margin-top:12px;">ログイン</button>
+    <p class="login-err" id="login-err"></p>
   </div>
 </div>
 
@@ -802,6 +844,7 @@ var PRESET_TAGS=['立ち回り','選出','初手','構築'];
 
 // ===== 状態 =====
 var sb=null,cache={dex:[],parties:[],tags:[]};
+var currentUser=null; // {id, username}
 var mCtx=null,mId=null,pEIdx=null;
 var tPP=[],tMP=[],tOP=[];
 var pickCb=null;
@@ -880,6 +923,60 @@ function bindSlots(cont,fn){
   });
 }
 
+// ===== パスワードハッシュ =====
+function sha256(str){
+  var buf=new TextEncoder().encode(str);
+  return crypto.subtle.digest('SHA-256',buf).then(function(hash){
+    return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+  });
+}
+
+// ===== ログイン/登録 =====
+var loginMode='login'; // 'login' | 'register'
+function showLoginPanel(){
+  g('login-panel').style.display='flex';
+  g('main-panel').style.display='none';
+  g('setup-panel').style.display='none';
+  g('header-right').style.display='none';
+}
+function doLogin(){
+  var username=g('login-username').value.trim();
+  var password=g('login-password').value;
+  var err=g('login-err');
+  err.style.display='none';
+  if(!username||!password){err.textContent='IDとパスワードを入力してください';err.style.display='block';return;}
+  var btn=g('btn-login');
+  btn.disabled=true;btn.textContent=loginMode==='login'?'確認中...':'登録中...';
+  sha256(password).then(function(hash){
+    if(loginMode==='login'){
+      return sb.from('users').select('id,username').eq('username',username).eq('password_hash',hash).single().then(function(r){
+        if(r.error||!r.data){throw new Error('IDまたはパスワードが違います');}
+        return r.data;
+      });
+    } else {
+      return sb.from('users').select('id').eq('username',username).single().then(function(r){
+        if(r.data){throw new Error('そのユーザーIDは既に使われています');}
+        return sb.from('users').insert({username:username,password_hash:hash}).select('id,username').single().then(function(r2){
+          if(r2.error)throw new Error('登録失敗: '+r2.error.message);
+          return r2.data;
+        });
+      });
+    }
+  }).then(function(user){
+    currentUser=user;
+    localStorage.setItem('current_user',JSON.stringify(user));
+    g('login-panel').style.display='none';
+    g('main-panel').style.display='block';
+    g('header-right').style.display='flex';
+    g('user-badge').textContent='👤 '+user.username;
+    initNatures();bindAll();loadAll();
+  }).catch(function(e){
+    err.textContent=e.message;err.style.display='block';
+  }).then(function(){
+    btn.disabled=false;btn.textContent=loginMode==='login'?'ログイン':'登録する';
+  });
+}
+
 // ===== 接続 =====
 function doConnect(){
   var url=g('sb-url').value.trim(),key=g('sb-key').value.trim();
@@ -896,20 +993,37 @@ function doConnect(){
     localStorage.setItem('sb_url',url);
     localStorage.setItem('sb_key',key);
     g('setup-panel').style.display='none';
-    g('main-panel').style.display='block';
-    g('header-right').style.display='flex';
-    try{g('conn-badge').textContent='接続中: '+new URL(url).hostname.split('.')[0];}catch(e){}
-    initNatures();bindAll();loadAll();
+    // 保存済みユーザーがあれば自動ログイン
+    var saved=localStorage.getItem('current_user');
+    if(saved){
+      try{
+        currentUser=JSON.parse(saved);
+        g('login-panel').style.display='none';
+        g('main-panel').style.display='block';
+        g('header-right').style.display='flex';
+        g('user-badge').textContent='👤 '+currentUser.username;
+        initNatures();bindAll();loadAll();
+        return;
+      }catch(e){localStorage.removeItem('current_user');}
+    }
+    showLoginPanel();
   });
 }
 
 // ===== イベントバインド =====
 function bindAll(){
   g('btn-disconnect').addEventListener('click',function(){
-    sb=null;localStorage.clear();
+    sb=null;currentUser=null;localStorage.clear();
     g('main-panel').style.display='none';
     g('header-right').style.display='none';
     g('setup-panel').style.display='block';
+    g('login-panel').style.display='none';
+  });
+  g('btn-logout').addEventListener('click',function(){
+    currentUser=null;localStorage.removeItem('current_user');
+    g('main-panel').style.display='none';
+    showLoginPanel();
+    toast('ログアウトしました');
   });
   document.querySelectorAll('.tab').forEach(function(el){
     el.addEventListener('click',function(){
@@ -1003,6 +1117,22 @@ function bindAll(){
 // ===== 接続ボタン即時バインド =====
 g('btn-connect').addEventListener('click',doConnect);
 
+// ===== ログインパネル即時バインド =====
+g('btn-login').addEventListener('click',doLogin);
+g('login-password').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+g('ltab-login').addEventListener('click',function(){
+  loginMode='login';
+  g('ltab-login').classList.add('active');g('ltab-register').classList.remove('active');
+  g('btn-login').textContent='ログイン';
+  g('login-err').style.display='none';
+});
+g('ltab-register').addEventListener('click',function(){
+  loginMode='register';
+  g('ltab-register').classList.add('active');g('ltab-login').classList.remove('active');
+  g('btn-login').textContent='登録する';
+  g('login-err').style.display='none';
+});
+
 // ===== localStorage復元 =====
 (function(){
   var u=localStorage.getItem('sb_url'),k=localStorage.getItem('sb_key');
@@ -1016,23 +1146,25 @@ function loadAll(){
     renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
   }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
 }
-function loadDex(){return sb.from('pokemon').select('*').order('id').then(function(r){if(r.error)throw r.error;cache.dex=r.data||[];});}
+function loadDex(){return sb.from('pokemon').select('*').eq('user_id',currentUser.id).order('id').then(function(r){if(r.error)throw r.error;cache.dex=r.data||[];});}
 function loadParties(){
-  return Promise.all([sb.from('parties').select('*').order('id'),sb.from('party_members').select('*,pokemon(*)').order('slot')]).then(function(rs){
+  return Promise.all([
+    sb.from('parties').select('*').eq('user_id',currentUser.id).order('id'),
+    sb.from('party_members').select('*,pokemon(*)').order('slot')
+  ]).then(function(rs){
     var parties=rs[0].data||[],members=rs[1].data||[];
     cache.parties=parties.map(function(p){return Object.assign({},p,{pokes:members.filter(function(m){return m.party_id===p.id;}).sort(function(a,b){return a.slot-b.slot;}).map(function(m){return m.pokemon;})});});
   });
 }
 function loadTags(){
-  return sb.from('tags').select('*').order('id').then(function(r){
+  return sb.from('tags').select('*').eq('user_id',currentUser.id).order('id').then(function(r){
     if(r.error){cache.tags=[];return;}
     cache.tags=r.data||[];
-    // プリセットが未登録なら自動挿入
     var existing=cache.tags.map(function(t){return t.name;});
     var missing=PRESET_TAGS.filter(function(n){return existing.indexOf(n)<0;});
     if(!missing.length)return;
-    return sb.from('tags').insert(missing.map(function(n){return{name:n};})).then(function(){
-      return sb.from('tags').select('*').order('id').then(function(r2){if(!r2.error)cache.tags=r2.data||[];});
+    return sb.from('tags').insert(missing.map(function(n){return{name:n,user_id:currentUser.id};})).then(function(){
+      return sb.from('tags').select('*').eq('user_id',currentUser.id).order('id').then(function(r2){if(!r2.error)cache.tags=r2.data||[];});
     });
   });
 }
@@ -1060,7 +1192,7 @@ function addTagGlobal(name,cb){
   name=name.trim();
   if(!name)return;
   if(cache.tags.find(function(t){return t.name===name;})){toast('同名のタグが既にあります');return;}
-  sb.from('tags').insert({name:name}).select().single().then(function(r){
+  sb.from('tags').insert({name:name,user_id:currentUser.id}).select().single().then(function(r){
     if(r.error){toast('タグ追加失敗: '+r.error.message,4000);return;}
     cache.tags.push(r.data);
     if(cb)cb(r.data.id);
@@ -1143,7 +1275,7 @@ function saveBattle(){
   var myLead=getChecked('my-lead')[0];
   var oppSelected=getChecked('opp-select');
   var oppLead=getChecked('opp-lead')[0];
-  sb.from('battles').insert({battle_date:new Date().toISOString().split('T')[0],result:g('battle-result').value,rank:g('battle-rank').value,memo:g('battle-memo').value.trim()||null,party_id:pid}).select().single().then(function(r){
+  sb.from('battles').insert({battle_date:new Date().toISOString().split('T')[0],result:g('battle-result').value,rank:g('battle-rank').value,memo:g('battle-memo').value.trim()||null,party_id:pid,user_id:currentUser.id}).select().single().then(function(r){
     if(r.error)throw r.error;
     var bid=r.data.id;
     function mkR(p,i,selectedArr,leadIdx){return{battle_id:bid,slot:i+1,pokemon_id:p.id||null,name:p.name,nature:p.nature||null,item:p.item||null,ability:p.ability||null,bs_hp:p.bs_hp||null,bs_atk:p.bs_atk||null,bs_def:p.bs_def||null,bs_spa:p.bs_spa||null,bs_spd:p.bs_spd||null,bs_spe:p.bs_spe||null,ev_hp:p.ev_hp||0,ev_atk:p.ev_atk||0,ev_def:p.ev_def||0,ev_spa:p.ev_spa||0,ev_spd:p.ev_spd||0,ev_spe:p.ev_spe||0,move1:p.move1||null,move2:p.move2||null,move3:p.move3||null,move4:p.move4||null,is_selected:selectedArr.indexOf(i)>=0,is_lead:leadIdx===i};}
@@ -1196,7 +1328,7 @@ function saveParty(){
       .then(function(){return sb.from('party_members').delete().eq('party_id',pid);})
       .then(function(){return pid;});
   }else{
-    pr=sb.from('parties').insert({name:name}).select().single().then(function(r){if(r.error)throw r.error;return r.data.id;});
+    pr=sb.from('parties').insert({name:name,user_id:currentUser.id}).select().single().then(function(r){if(r.error)throw r.error;return r.data.id;});
   }
   pr.then(function(pid){return sb.from('party_members').insert(pokes.map(function(p,i){return{party_id:pid,pokemon_id:p.id,slot:i+1};}));})
   .then(function(r){if(r&&r.error)throw r.error;return loadParties();})
@@ -1260,7 +1392,7 @@ function savePoke(){
   var row={name:name,nature:g('m-nature').value||null,item:g('m-item').value.trim()||null,ability:g('m-ability').value.trim()||null,bs_hp:bs.hp,bs_atk:bs.atk,bs_def:bs.def,bs_spa:bs.spa,bs_spd:bs.spd,bs_spe:bs.spe,ev_hp:ev.hp,ev_atk:ev.atk,ev_def:ev.def,ev_spa:ev.spa,ev_spd:ev.spd,ev_spe:ev.spe,move1:g('m-move1').value.trim()||null,move2:g('m-move2').value.trim()||null,move3:g('m-move3').value.trim()||null,move4:g('m-move4').value.trim()||null,note:g('m-note').value.trim()||null};
   if(mCtx==='dex'){
     load(true);
-    var pr=(mId!==null)?sb.from('pokemon').update(Object.assign({},row,{updated_at:new Date().toISOString()})).eq('id',mId):sb.from('pokemon').insert(row);
+    var pr=(mId!==null)?sb.from('pokemon').update(Object.assign({},row,{updated_at:new Date().toISOString()})).eq('id',mId):sb.from('pokemon').insert(Object.assign({},row,{user_id:currentUser.id}));
     pr.then(function(r){if(r.error)throw r.error;return loadDex();}).then(function(){renderDex();g('modal-poke').classList.remove('show');toast('保存しました');}).catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
   }else{
     var pk=Object.assign({},row,{id:null});
@@ -1294,7 +1426,7 @@ function renderHistory(){
   var d=g('history-list');if(!d||!sb)return Promise.resolve();
   var rf=g('filter-result').value,rnk=g('filter-rank').value,rtag=g('filter-tag').value;
   updateTagFilter();
-  var q=sb.from('battles').select('*,battle_my_pokemon(*),battle_opp_pokemon(*),battle_tags(tag_id,tags(id,name))').order('battle_date',{ascending:false}).order('id',{ascending:false}).limit(50);
+  var q=sb.from('battles').select('*,battle_my_pokemon(*),battle_opp_pokemon(*),battle_tags(tag_id,tags(id,name))').eq('user_id',currentUser.id).order('battle_date',{ascending:false}).order('id',{ascending:false}).limit(50);
   if(rf)q=q.eq('result',rf);if(rnk)q=q.eq('rank',rnk);
   return q.then(function(r){
     if(r.error){d.innerHTML='<div class="empty">読込エラー: '+r.error.message+'</div>';return;}
@@ -1534,9 +1666,9 @@ function deleteTag(tid){
 
 // ===== 統計 =====
 function renderStats(){
-  if(!sb)return Promise.resolve();
+  if(!sb||!currentUser)return Promise.resolve();
   return Promise.all([
-    sb.from('battles').select('id,result,rank').order('battle_date',{ascending:false}),
+    sb.from('battles').select('id,result,rank').eq('user_id',currentUser.id).order('battle_date',{ascending:false}),
     sb.from('battle_my_pokemon').select('name,is_selected,is_lead,battle_id')
   ]).then(function(rs){
     var battles=rs[0].data||[];
