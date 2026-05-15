@@ -560,6 +560,21 @@ body {
 .stag-name-input.dirty ~ .stag-save { display: inline-flex; }
 .stag-del { color: var(--lose); border-color: var(--lose); flex-shrink: 0; }
 .stag-del:hover { background: var(--lose-bg); }
+
+/* ========== タイプバッジ ========== */
+.type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  letter-spacing: .02em;
+  vertical-align: middle;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.type-row { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -778,6 +793,10 @@ body {
     <button class="modal-close" id="btn-close-poke" title="閉じる">✕</button>
     <p class="modal-title" id="modal-poke-title">ポケモンを登録</p>
     <div class="form-row"><label>名前</label><input id="m-name" placeholder="例: ガブリアス"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="form-row" style="margin-bottom:0;"><label>タイプ1</label><select id="m-type1"></select></div>
+      <div class="form-row" style="margin-bottom:0;"><label>タイプ2</label><select id="m-type2"></select></div>
+    </div>
 
     <p class="form-section">種族値（Base Stats）</p>
     <div class="bs-grid" style="margin-bottom:8px;">
@@ -860,6 +879,14 @@ var SL={hp:'H',atk:'A',def:'B',spa:'C',spd:'D',spe:'S'};
 var BC={hp:'#4caf50',atk:'#f44336',def:'#ff9800',spa:'#2196f3',spd:'#9c27b0',spe:'#00bcd4'};
 var SCHEMA='public';
 var PRESET_TAGS=['立ち回り','選出','初手','構築'];
+var TYPES=['ノーマル','ほのお','みず','くさ','でんき','こおり','かくとう','どく','じめん','ひこう','エスパー','むし','いわ','ゴースト','ドラゴン','あく','はがね','フェアリー'];
+var TYPE_COLOR={
+  'ノーマル':'#9e9e8a','ほのお':'#e8502a','みず':'#3d8ff0','くさ':'#4caf50',
+  'でんき':'#e0b800','こおり':'#5bc8d0','かくとう':'#c2533e','どく':'#9c4fa8',
+  'じめん':'#c9a84c','ひこう':'#6e8fd4','エスパー':'#d8446e','むし':'#8ca800',
+  'いわ':'#b8a848','ゴースト':'#5c4d8a','ドラゴン':'#5060e8','あく':'#4d3d3d',
+  'はがね':'#8a8ab0','フェアリー':'#d884b4'
+};
 
 // ===== 状態 =====
 var sb=null,cache={dex:[],parties:[],tags:[]};
@@ -884,6 +911,20 @@ document.addEventListener('click', function(e){
 function g(id){return document.getElementById(id);}
 function toast(msg,d){var t=g('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},d||2500);}
 function load(v){g('loading').classList.toggle('show',v);}
+
+// ===== タイプ =====
+function typeHtml(t){ if(!t)return''; return'<span class="type-badge" style="background:'+( TYPE_COLOR[t]||'#999')+'">' +t+'</span>';}
+function typesHtml(p){ var h=''; if(p.type1)h+=typeHtml(p.type1); if(p.type2)h+=typeHtml(p.type2); return h?'<span class="type-row">'+h+'</span>':''; }
+function initTypes(){
+  var opts1='<option value="">-- なし --</option>';
+  var opts2='<option value="">なし</option>';
+  TYPES.forEach(function(t){
+    opts1+='<option value="'+t+'">'+t+'</option>';
+    opts2+='<option value="'+t+'">'+t+'</option>';
+  });
+  g('m-type1').innerHTML=opts1;
+  g('m-type2').innerHTML=opts2;
+}
 
 // ===== 性格 =====
 function initNatures(){
@@ -990,7 +1031,7 @@ function doLogin(){
     g('main-panel').style.display='block';
     g('header-right').style.display='flex';
     g('user-badge').textContent='👤 '+user.username;
-    initNatures();bindAll();loadAll();
+    initNatures();initTypes();bindAll();loadAll();
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
@@ -1023,7 +1064,7 @@ function doConnect(){
         g('main-panel').style.display='block';
         g('header-right').style.display='flex';
         g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();bindAll();loadAll();
+        initNatures();initTypes();bindAll();loadAll();
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
@@ -1390,7 +1431,8 @@ function renderDex(){
     var ni=p.nature?NATURES.find(function(n){return n[0]===p.nature;}):null;
     var nh=(ni&&ni[1])?'<span class="up" style="font-size:11px;">'+ni[1]+'↑</span> <span class="down" style="font-size:11px;">'+ni[2]+'↓</span>':(p.nature?'<span class="neu" style="font-size:11px;">補正なし</span>':'');
     var bst=bsTot(p),moves=[p.move1,p.move2,p.move3,p.move4].filter(Boolean);
-    h+='<div class="dex-card"><div class="dex-head"><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><span class="dex-name">'+p.name+'</span>'+(p.nature?'<span class="nbadge">'+p.nature+'</span>':'')+' '+nh+'</div>'+(bst?'<div class="bs-pills" style="margin-top:4px;">'+bsHtml(p)+'<span style="font-size:11px;color:var(--text3);margin-left:4px;">合計'+bst+'</span></div>':'')+'<div class="dex-info">'+(p.item?'持ち物: '+p.item+'　':'')+(p.ability?'特性: '+p.ability:'')+'</div>'+(evHtml(p)?'<div class="ev-pills">'+evHtml(p)+'</div>':'')+(moves.length?'<div class="dex-info" style="margin-top:3px;">'+moves.join(' / ')+'</div>':'')+(p.note?'<div class="dex-info">'+p.note+'</div>':'')+'</div><div style="display:flex;gap:5px;flex-shrink:0;margin-left:8px;"><button class="btn btn-sm" data-ed="'+p.id+'">編集</button><button class="btn btn-sm btn-danger" data-dd="'+p.id+'">削除</button></div></div></div>';
+    var tBadges=typesHtml(p);
+    h+='<div class="dex-card"><div class="dex-head"><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><span class="dex-name">'+p.name+'</span>'+tBadges+(p.nature?'<span class="nbadge">'+p.nature+'</span>':'')+' '+nh+'</div>'+(bst?'<div class="bs-pills" style="margin-top:4px;">'+bsHtml(p)+'<span style="font-size:11px;color:var(--text3);margin-left:4px;">合計'+bst+'</span></div>':'')+'<div class="dex-info">'+(p.item?'持ち物: '+p.item+'　':'')+(p.ability?'特性: '+p.ability:'')+'</div>'+(evHtml(p)?'<div class="ev-pills">'+evHtml(p)+'</div>':'')+(moves.length?'<div class="dex-info" style="margin-top:3px;">'+moves.join(' / ')+'</div>':'')+(p.note?'<div class="dex-info">'+p.note+'</div>':'')+'</div><div style="display:flex;gap:5px;flex-shrink:0;margin-left:8px;"><button class="btn btn-sm" data-ed="'+p.id+'">編集</button><button class="btn btn-sm btn-danger" data-dd="'+p.id+'">削除</button></div></div></div>';
   });
   d.innerHTML=h;
   d.querySelectorAll('[data-ed]').forEach(function(el){el.addEventListener('click',function(){openPokeModal('dex',parseInt(el.getAttribute('data-ed')));});});
@@ -1410,6 +1452,8 @@ function openPokeModal(ctx,id){
   else if(ctx==='opp'&&id!==null)p=tOP[id];
   else if(ctx==='party'&&id!==null)p=tPP[id];
   g('m-name').value=p?p.name:'';
+  g('m-type1').value=p?(p.type1||''):'';
+  g('m-type2').value=p?(p.type2||''):'';
   g('m-nature').value=p?(p.nature||''):'';
   g('m-item').value=p?(p.item||''):'';
   g('m-ability').value=p?(p.ability||''):'';
@@ -1427,7 +1471,7 @@ function savePoke(){
   var ev=getEv(),bs=getBs();
   if(EK.some(function(k){return ev[k]>32;})){toast('1項目の能力ポイントは最大32です');return;}
   if(EK.reduce(function(s,k){return s+ev[k];},0)>66){toast('能力ポイントの合計は66以下にしてください');return;}
-  var row={name:name,nature:g('m-nature').value||null,item:g('m-item').value.trim()||null,ability:g('m-ability').value.trim()||null,bs_hp:bs.hp,bs_atk:bs.atk,bs_def:bs.def,bs_spa:bs.spa,bs_spd:bs.spd,bs_spe:bs.spe,ev_hp:ev.hp,ev_atk:ev.atk,ev_def:ev.def,ev_spa:ev.spa,ev_spd:ev.spd,ev_spe:ev.spe,move1:g('m-move1').value.trim()||null,move2:g('m-move2').value.trim()||null,move3:g('m-move3').value.trim()||null,move4:g('m-move4').value.trim()||null,note:g('m-note').value.trim()||null};
+  var row={name:name,type1:g('m-type1').value||null,type2:g('m-type2').value||null,nature:g('m-nature').value||null,item:g('m-item').value.trim()||null,ability:g('m-ability').value.trim()||null,bs_hp:bs.hp,bs_atk:bs.atk,bs_def:bs.def,bs_spa:bs.spa,bs_spd:bs.spd,bs_spe:bs.spe,ev_hp:ev.hp,ev_atk:ev.atk,ev_def:ev.def,ev_spa:ev.spa,ev_spd:ev.spd,ev_spe:ev.spe,move1:g('m-move1').value.trim()||null,move2:g('m-move2').value.trim()||null,move3:g('m-move3').value.trim()||null,move4:g('m-move4').value.trim()||null,note:g('m-note').value.trim()||null};
   if(mCtx==='dex'){
     load(true);
     var pr=(mId!==null)?sb.from('pokemon').update(Object.assign({},row,{updated_at:new Date().toISOString()})).eq('id',mId):sb.from('pokemon').insert(Object.assign({},row,{user_id:currentUser.id}));
@@ -1453,7 +1497,8 @@ function renderPickList(){
     var ni=p.nature?NATURES.find(function(n){return n[0]===p.nature;}):null;
     var hint=(ni&&ni[1])?'<span class="up" style="font-size:11px;">'+ni[1]+'↑</span><span class="down" style="font-size:11px;">'+ni[2]+'↓</span>':'';
     var bst=bsTot(p);
-    h+='<div class="pick-item" data-pid="'+p.id+'"><div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-size:13px;font-weight:700;">'+p.name+'</span>'+(p.nature?'<span style="font-size:11px;color:var(--text2);">'+p.nature+'</span>':'')+hint+'</div>'+(bst?'<span style="font-size:11px;color:var(--text3);">合計種族値 '+bst+'</span>':'')+'</div><span style="font-size:12px;color:var(--text3);">選択 ›</span></div>';
+    var tBadges=typesHtml(p);
+    h+='<div class="pick-item" data-pid="'+p.id+'"><div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-size:13px;font-weight:700;">'+p.name+'</span>'+tBadges+(p.nature?'<span style="font-size:11px;color:var(--text2);">'+p.nature+'</span>':'')+hint+'</div>'+(bst?'<span style="font-size:11px;color:var(--text3);">合計種族値 '+bst+'</span>':'')+'</div><span style="font-size:12px;color:var(--text3);">選択 ›</span></div>';
   });
   d.innerHTML=h;
   d.querySelectorAll('[data-pid]').forEach(function(el){el.addEventListener('click',function(){var id=parseInt(el.getAttribute('data-pid'));if(pickCb)pickCb(cache.dex.find(function(p){return p.id===id;}));g('modal-pick').classList.remove('show');});});
