@@ -1071,10 +1071,12 @@ body {
       </div>
 
       <div class="form-row">
-        <label>技</label>
+        <label>技（マスターにない技も自由入力可）</label>
         <div class="move-grid">
-          <input id="m-move1" placeholder="技1"><input id="m-move2" placeholder="技2">
-          <input id="m-move3" placeholder="技3"><input id="m-move4" placeholder="技4">
+          <div class="autocomplete-wrap"><input id="m-move1" placeholder="技1" autocomplete="off"><div class="autocomplete-list" id="ac-move1" style="display:none;"></div></div>
+          <div class="autocomplete-wrap"><input id="m-move2" placeholder="技2" autocomplete="off"><div class="autocomplete-list" id="ac-move2" style="display:none;"></div></div>
+          <div class="autocomplete-wrap"><input id="m-move3" placeholder="技3" autocomplete="off"><div class="autocomplete-list" id="ac-move3" style="display:none;"></div></div>
+          <div class="autocomplete-wrap"><input id="m-move4" placeholder="技4" autocomplete="off"><div class="autocomplete-list" id="ac-move4" style="display:none;"></div></div>
         </div>
       </div>
       <div class="form-row"><label>備考</label><input id="m-note" placeholder="調整意図など"></div>
@@ -1143,8 +1145,62 @@ function loadPokedexMaster() {
 }
 
 
-// オートコンプリート
-var acSelectedIdx=-1;
+// ===== 技マスターデータ（DBから取得） =====
+var movesMasterCache = [];
+
+function loadMovesMaster() {
+  return sb.from('moves_master')
+    .select('id,name,type,category,power,pp')
+    .eq('is_available', true)
+    .order('name')
+    .then(function(r) {
+      if (r.error) { console.warn('moves_master取得失敗:', r.error.message); return; }
+      movesMasterCache = r.data || [];
+    });
+}
+
+function initMoveAutocomplete() {
+  [1,2,3,4].forEach(function(n) {
+    var inp = g('m-move'+n);
+    var list = g('ac-move'+n);
+    var selIdx = -1;
+    inp.addEventListener('input', function() {
+      var q = inp.value.trim();
+      if (!q || !movesMasterCache.length) { list.style.display='none'; return; }
+      var matches = movesMasterCache.filter(function(m) { return m.name.indexOf(q) >= 0; }).slice(0, 8);
+      if (!matches.length) { list.style.display='none'; return; }
+      list.innerHTML = matches.map(function(m, i) {
+        var badge = '<span class="type-badge" style="background:'+(TYPE_COLOR[m.type]||'#999')+'">'+m.type+'</span>';
+        var cat = m.category==='ぶつり'?'⚔️':m.category==='とくしゅ'?'✨':'🔄';
+        var pw = m.power ? m.power+'威力' : 'へんか';
+        return '<div class="ac-item" data-i="'+i+'">'+
+          '<span style="font-weight:700;flex:1;">'+m.name+'</span>'+
+          '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);">'+cat+' '+pw+'　'+badge+'</span>'+
+        '</div>';
+      }).join('');
+      list.style.display = 'block';
+      selIdx = -1;
+      list.querySelectorAll('.ac-item').forEach(function(el, i) {
+        el.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          inp.value = matches[i].name;
+          list.style.display = 'none';
+        });
+      });
+    });
+    inp.addEventListener('keydown', function(e) {
+      var items = list.querySelectorAll('.ac-item');
+      if (!items.length) return;
+      if (e.key==='ArrowDown') { e.preventDefault(); selIdx=Math.min(selIdx+1,items.length-1); items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);}); }
+      else if (e.key==='ArrowUp') { e.preventDefault(); selIdx=Math.max(selIdx-1,0); items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);}); }
+      else if (e.key==='Enter' && selIdx>=0) { e.preventDefault(); inp.value=matches[selIdx].name; list.style.display='none'; }
+      else if (e.key==='Escape') { list.style.display='none'; }
+    });
+    inp.addEventListener('blur', function() { setTimeout(function(){list.style.display='none';}, 150); });
+  });
+}
+
+
 function initAutocomplete(){
   var inp=g('m-name');
   var list=g('ac-list');
@@ -1339,7 +1395,7 @@ function doLogin(){
     g('main-panel').style.display='block';
     g('header-right').style.display='flex';
     g('user-badge').textContent='👤 '+user.username;
-    initNatures();initTypes();initAutocomplete();initDetailToggle();bindAll();loadAll();
+    initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initDetailToggle();bindAll();loadAll();
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
@@ -1372,7 +1428,7 @@ function doConnect(){
         g('main-panel').style.display='block';
         g('header-right').style.display='flex';
         g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();initTypes();initAutocomplete();initDetailToggle();bindAll();loadAll();
+        initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initDetailToggle();bindAll();loadAll();
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
@@ -1513,7 +1569,7 @@ g('ltab-register').addEventListener('click',function(){
 // ===== データ読み込み =====
 function loadAll(){
   load(true);
-  Promise.all([loadPokedexMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
+  Promise.all([loadPokedexMaster(),loadMovesMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
     renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
   }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
 }
