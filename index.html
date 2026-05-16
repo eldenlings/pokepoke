@@ -1700,13 +1700,18 @@ function renderPmSlots(){
   var d=g('pm-slots'),h='';
   for(var i=0;i<6;i++)h+=slotHtml(tPP[i]||null,i,'pm');
   d.innerHTML=h;
-  bindSlots(d,function(i){if(cache.dex.length>0)openPickModal(function(p){tPP[i]=p;renderPmSlots();});else openPokeModal('party',i);});
+  bindSlots(d,function(i){
+    if(!cache.dex.length){toast('先にポケモン登録タブでポケモンを登録してください');return;}
+    openPickModal(function(p){tPP[i]=p;renderPmSlots();});
+  });
 }
 function saveParty(){
   var name=g('pm-name').value.trim();
   if(!name){toast('パーティ名を入力してください');return;}
-  var pokes=tPP.filter(Boolean);
-  if(!pokes.length){toast('ポケモンを追加してください');return;}
+  var pokes=tPP.filter(Boolean).filter(function(p){return p.id;});
+  if(!pokes.length){toast('図鑑に登録済みのポケモンを追加してください');return;}
+  var noId=tPP.filter(Boolean).filter(function(p){return !p.id;});
+  if(noId.length){toast(noId.map(function(p){return p.name;}).join('・')+'は図鑑未登録のためスキップされます',3000);}
   load(true);
   var pr;
   if(pEIdx!==null){
