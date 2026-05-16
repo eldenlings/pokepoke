@@ -693,7 +693,56 @@ body {
 }
 .type-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
 
-/* ========== デスクトップ対応 ========== */
+/* ========== オートコンプリート ========== */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0; right: 0;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+.ac-item {
+  padding: 10px 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .1s;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.active { background: var(--accent-bg); }
+
+/* ========== クイック登録 詳細トグル ========== */
+.detail-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: .04em;
+  border-top: 2px solid var(--border);
+  margin-top: 4px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.detail-toggle-arrow { font-size: 14px; transition: transform .2s; }
+.detail-toggle.open .detail-toggle-arrow { transform: rotate(180deg); }
+.detail-body { display: none; }
+.detail-body.open { display: block; }
 @media (min-width: 640px) {
   .tabs {
     position: sticky;
@@ -962,56 +1011,75 @@ body {
   <div class="modal-box">
     <button class="modal-close" id="btn-close-poke" title="閉じる">✕</button>
     <p class="modal-title" id="modal-poke-title">ポケモンを登録</p>
-    <div class="form-row"><label>名前</label><input id="m-name" placeholder="例: ガブリアス"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+
+    <!-- 名前（オートコンプリート） -->
+    <div class="form-row">
+      <label>ポケモン名 <span style="color:var(--lose);">*</span></label>
+      <div class="autocomplete-wrap">
+        <input id="m-name" placeholder="名前を入力（例: ガブリアス）" autocomplete="off">
+        <div class="autocomplete-list" id="ac-list" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- タイプ（自動入力 or 手動） -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
       <div class="form-row" style="margin-bottom:0;"><label>タイプ1</label><select id="m-type1"></select></div>
       <div class="form-row" style="margin-bottom:0;"><label>タイプ2</label><select id="m-type2"></select></div>
     </div>
 
-    <p class="form-section">種族値（Base Stats）</p>
-    <div class="bs-grid" style="margin-bottom:8px;">
-      <div class="bs-cell"><label>H</label><input type="number" id="bs-hp"  min="0" max="255" placeholder="-"></div>
-      <div class="bs-cell"><label>A</label><input type="number" id="bs-atk" min="0" max="255" placeholder="-"></div>
-      <div class="bs-cell"><label>B</label><input type="number" id="bs-def" min="0" max="255" placeholder="-"></div>
-      <div class="bs-cell"><label>C</label><input type="number" id="bs-spa" min="0" max="255" placeholder="-"></div>
-      <div class="bs-cell"><label>D</label><input type="number" id="bs-spd" min="0" max="255" placeholder="-"></div>
-      <div class="bs-cell"><label>S</label><input type="number" id="bs-spe" min="0" max="255" placeholder="-"></div>
+    <!-- 詳細トグル -->
+    <div class="detail-toggle" id="detail-toggle">
+      <span>📝 詳細情報を入力（任意）</span>
+      <span class="detail-toggle-arrow">▼</span>
     </div>
-    <div id="bs-bars"></div>
-    <p class="bs-total-txt" id="bs-total-txt"></p>
+    <div class="detail-body" id="detail-body">
 
-    <p class="form-section">育成情報</p>
-    <div class="form-row">
-      <label>性格</label>
-      <div class="nature-row">
-        <select id="m-nature"></select>
-        <span class="nature-hint" id="nature-hint"><span class="neu">-</span></span>
+      <p class="form-section">種族値（Base Stats）</p>
+      <div class="bs-grid" style="margin-bottom:8px;">
+        <div class="bs-cell"><label>H</label><input type="number" id="bs-hp"  min="0" max="255" placeholder="-"></div>
+        <div class="bs-cell"><label>A</label><input type="number" id="bs-atk" min="0" max="255" placeholder="-"></div>
+        <div class="bs-cell"><label>B</label><input type="number" id="bs-def" min="0" max="255" placeholder="-"></div>
+        <div class="bs-cell"><label>C</label><input type="number" id="bs-spa" min="0" max="255" placeholder="-"></div>
+        <div class="bs-cell"><label>D</label><input type="number" id="bs-spd" min="0" max="255" placeholder="-"></div>
+        <div class="bs-cell"><label>S</label><input type="number" id="bs-spe" min="0" max="255" placeholder="-"></div>
       </div>
-    </div>
-    <div class="form-row"><label>持ち物</label><input id="m-item" placeholder="例: こだわりスカーフ"></div>
-    <div class="form-row"><label>特性</label><input id="m-ability" placeholder="例: すながくれ"></div>
+      <div id="bs-bars"></div>
+      <p class="bs-total-txt" id="bs-total-txt"></p>
 
-    <div class="form-row">
-      <label>能力ポイント（1項目最大32・合計66以下）</label>
-      <div class="bs-grid">
-        <div class="bs-cell"><label>H</label><input type="number" id="ev-hp"  min="0" max="32" value="0"></div>
-        <div class="bs-cell"><label>A</label><input type="number" id="ev-atk" min="0" max="32" value="0"></div>
-        <div class="bs-cell"><label>B</label><input type="number" id="ev-def" min="0" max="32" value="0"></div>
-        <div class="bs-cell"><label>C</label><input type="number" id="ev-spa" min="0" max="32" value="0"></div>
-        <div class="bs-cell"><label>D</label><input type="number" id="ev-spd" min="0" max="32" value="0"></div>
-        <div class="bs-cell"><label>S</label><input type="number" id="ev-spe" min="0" max="32" value="0"></div>
+      <p class="form-section">育成情報</p>
+      <div class="form-row">
+        <label>性格</label>
+        <div class="nature-row">
+          <select id="m-nature"></select>
+          <span class="nature-hint" id="nature-hint"><span class="neu">-</span></span>
+        </div>
       </div>
-      <div class="ev-total" id="ev-total-txt">合計: 0 / 66</div>
-    </div>
+      <div class="form-row"><label>持ち物</label><input id="m-item" placeholder="例: こだわりスカーフ"></div>
+      <div class="form-row"><label>特性</label><input id="m-ability" placeholder="例: すながくれ"></div>
 
-    <div class="form-row">
-      <label>技</label>
-      <div class="move-grid">
-        <input id="m-move1" placeholder="技1"><input id="m-move2" placeholder="技2">
-        <input id="m-move3" placeholder="技3"><input id="m-move4" placeholder="技4">
+      <div class="form-row">
+        <label>能力ポイント（1項目最大32・合計66以下）</label>
+        <div class="bs-grid">
+          <div class="bs-cell"><label>H</label><input type="number" id="ev-hp"  min="0" max="32" value="0"></div>
+          <div class="bs-cell"><label>A</label><input type="number" id="ev-atk" min="0" max="32" value="0"></div>
+          <div class="bs-cell"><label>B</label><input type="number" id="ev-def" min="0" max="32" value="0"></div>
+          <div class="bs-cell"><label>C</label><input type="number" id="ev-spa" min="0" max="32" value="0"></div>
+          <div class="bs-cell"><label>D</label><input type="number" id="ev-spd" min="0" max="32" value="0"></div>
+          <div class="bs-cell"><label>S</label><input type="number" id="ev-spe" min="0" max="32" value="0"></div>
+        </div>
+        <div class="ev-total" id="ev-total-txt">合計: 0 / 66</div>
       </div>
-    </div>
-    <div class="form-row"><label>備考</label><input id="m-note" placeholder="調整意図など"></div>
+
+      <div class="form-row">
+        <label>技</label>
+        <div class="move-grid">
+          <input id="m-move1" placeholder="技1"><input id="m-move2" placeholder="技2">
+          <input id="m-move3" placeholder="技3"><input id="m-move4" placeholder="技4">
+        </div>
+      </div>
+      <div class="form-row"><label>備考</label><input id="m-note" placeholder="調整意図など"></div>
+    </div><!-- /detail-body -->
+
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button class="btn" id="btn-cancel-poke" style="flex:1;">キャンセル</button>
       <button class="btn btn-primary" id="btn-save-poke" style="flex:1;">保存</button>
@@ -1057,6 +1125,76 @@ var TYPE_COLOR={
   'いわ':'#b8a848','ゴースト':'#5c4d8a','ドラゴン':'#5060e8','あく':'#4d3d3d',
   'はがね':'#8a8ab0','フェアリー':'#d884b4'
 };
+
+// ===== ポケモンマスターデータ（名前・タイプ・種族値） =====
+// [name, type1, type2, hp, atk, def, spa, spd, spe]
+// ===== ポケモンマスターデータ（DBから取得） =====
+var pokedexMasterCache = [];  // DB取得後にここにキャッシュ
+
+function loadPokedexMaster() {
+  return sb.from('pokedex_master')
+    .select('id,ndex,name,form_name,type1,type2,bs_hp,bs_atk,bs_def,bs_spa,bs_spd,bs_spe,has_mega,is_available')
+    .eq('is_available', true)
+    .order('ndex')
+    .then(function(r) {
+      if (r.error) { console.warn('pokedex_master取得失敗:', r.error.message); return; }
+      pokedexMasterCache = r.data || [];
+    });
+}
+
+
+// オートコンプリート
+var acSelectedIdx=-1;
+function initAutocomplete(){
+  var inp=g('m-name');
+  var list=g('ac-list');
+  inp.addEventListener('input',function(){
+    var q=inp.value.trim();
+    if(!q){list.style.display='none';return;}
+    var matches=pokedexMasterCache.filter(function(p){return p.name.indexOf(q)>=0;}).slice(0,8);
+    if(!matches.length){list.style.display='none';return;}
+    list.innerHTML=matches.map(function(p,i){
+      var t1=p.type1?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type1]||'#999')+'">'+p.type1+'</span>':'';
+      var t2=p.type2?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type2]||'#999')+'">'+p.type2+'</span>':'';
+      return '<div class="ac-item" data-i="'+i+'">'+
+        '<span style="font-weight:700;flex:1;">'+p.name+'</span>'+
+        '<span style="display:flex;gap:3px;">'+t1+t2+'</span>'+
+      '</div>';
+    }).join('');
+    list.style.display='block';
+    acSelectedIdx=-1;
+    list.querySelectorAll('.ac-item').forEach(function(el,i){
+      var pd=matches[i];
+      el.addEventListener('mousedown',function(e){e.preventDefault();applyPokedexEntry(pd);});
+    });
+  });
+  inp.addEventListener('keydown',function(e){
+    var items=list.querySelectorAll('.ac-item');
+    if(!items.length)return;
+    if(e.key==='ArrowDown'){e.preventDefault();acSelectedIdx=Math.min(acSelectedIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===acSelectedIdx);});}
+    else if(e.key==='ArrowUp'){e.preventDefault();acSelectedIdx=Math.max(acSelectedIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===acSelectedIdx);});}
+    else if(e.key==='Enter'&&acSelectedIdx>=0){e.preventDefault();var item=items[acSelectedIdx];if(item){var idx=parseInt(item.getAttribute('data-i'));var q2=inp.value.trim();var m2=pokedexMasterCache.filter(function(p){return p.name.indexOf(q2)>=0;});if(m2[idx])applyPokedexEntry(m2[idx]);}}
+    else if(e.key==='Escape'){list.style.display='none';}
+  });
+  inp.addEventListener('blur',function(){setTimeout(function(){list.style.display='none';},150);});
+}
+function applyPokedexEntry(pd){
+  g('m-name').value=pd.name;
+  g('ac-list').style.display='none';
+  g('m-type1').value=pd.type1||'';
+  g('m-type2').value=pd.type2||'';
+  setBs({hp:pd.bs_hp,atk:pd.bs_atk,def:pd.bs_def,spa:pd.bs_spa,spd:pd.bs_spd,spe:pd.bs_spe});
+  var db=g('detail-body');var dt=g('detail-toggle');
+  if(!db.classList.contains('open')){db.classList.add('open');dt.classList.add('open');}
+}
+
+// 詳細トグル
+function initDetailToggle(){
+  var dt=g('detail-toggle');var db=g('detail-body');
+  dt.addEventListener('click',function(){
+    db.classList.toggle('open');dt.classList.toggle('open');
+  });
+}
 
 // ===== 状態 =====
 var sb=null,cache={dex:[],parties:[],tags:[]};
@@ -1201,7 +1339,7 @@ function doLogin(){
     g('main-panel').style.display='block';
     g('header-right').style.display='flex';
     g('user-badge').textContent='👤 '+user.username;
-    initNatures();initTypes();bindAll();loadAll();
+    initNatures();initTypes();initAutocomplete();initDetailToggle();bindAll();loadAll();
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
@@ -1234,7 +1372,7 @@ function doConnect(){
         g('main-panel').style.display='block';
         g('header-right').style.display='flex';
         g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();initTypes();bindAll();loadAll();
+        initNatures();initTypes();initAutocomplete();initDetailToggle();bindAll();loadAll();
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
@@ -1375,7 +1513,7 @@ g('ltab-register').addEventListener('click',function(){
 // ===== データ読み込み =====
 function loadAll(){
   load(true);
-  Promise.all([loadDex(),loadParties(),loadTags()]).then(function(){
+  Promise.all([loadPokedexMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
     renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
   }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
 }
@@ -1634,6 +1772,11 @@ function openPokeModal(ctx,id){
   updNH();
   var titles={dex:'ポケモンを登録',my:'自パーティに追加',opp:'相手ポケモンを追加（相手）',party:'パーティに追加'};
   g('modal-poke-title').textContent=p?'ポケモンを編集':(titles[ctx]||'ポケモンを追加');
+  // 詳細欄：編集時（データあり）は開く、新規は閉じる
+  var db=g('detail-body');var dt=g('detail-toggle');
+  var hasDetail=p&&(p.nature||p.item||p.ability||p.bs_hp||p.move1);
+  if(hasDetail){db.classList.add('open');dt.classList.add('open');}
+  else{db.classList.remove('open');dt.classList.remove('open');}
   g('modal-poke').classList.add('show');
 }
 function savePoke(){
