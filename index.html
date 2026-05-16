@@ -1054,8 +1054,8 @@ body {
           <span class="nature-hint" id="nature-hint"><span class="neu">-</span></span>
         </div>
       </div>
-      <div class="form-row"><label>持ち物</label><input id="m-item" placeholder="例: こだわりスカーフ"></div>
-      <div class="form-row"><label>特性</label><input id="m-ability" placeholder="例: すながくれ"></div>
+      <div class="form-row"><label>持ち物</label><div class="autocomplete-wrap"><input id="m-item" placeholder="例: こだわりスカーフ" autocomplete="off"><div class="autocomplete-list" id="ac-item" style="display:none;"></div></div></div>
+      <div class="form-row"><label>特性</label><div class="autocomplete-wrap"><input id="m-ability" placeholder="例: すながくれ" autocomplete="off"><div class="autocomplete-list" id="ac-ability" style="display:none;"></div></div></div>
 
       <div class="form-row">
         <label>能力ポイント（1項目最大32・合計66以下）</label>
@@ -1145,7 +1145,60 @@ function loadPokedexMaster() {
 }
 
 
-// ===== 技マスターデータ（DBから取得） =====
+// ===== 持ち物・特性マスターデータ（DBから取得） =====
+var itemsMasterCache = [];
+var abilitiesMasterCache = [];
+
+function loadItemsMaster() {
+  return sb.from('items_master').select('id,name,category,description').eq('is_available',true).order('name')
+    .then(function(r){ if(r.error){console.warn('items_master取得失敗:',r.error.message);return;} itemsMasterCache=r.data||[]; });
+}
+function loadAbilitiesMaster() {
+  return sb.from('abilities_master').select('id,name,description').eq('is_available',true).order('name')
+    .then(function(r){ if(r.error){console.warn('abilities_master取得失敗:',r.error.message);return;} abilitiesMasterCache=r.data||[]; });
+}
+
+function initItemAbilityAutocomplete(){
+  // 汎用AC初期化（入力欄ID・リストID・キャッシュ・表示テキスト生成関数）
+  function setupAc(inpId, listId, cache, labelFn){
+    var inp=g(inpId), list=g(listId), selIdx=-1;
+    inp.addEventListener('input',function(){
+      var q=inp.value.trim();
+      if(!q||!cache.length){list.style.display='none';return;}
+      var matches=cache.filter(function(m){return m.name.indexOf(q)>=0;}).slice(0,8);
+      if(!matches.length){list.style.display='none';return;}
+      list.innerHTML=matches.map(function(m,i){
+        return '<div class="ac-item" data-i="'+i+'">'+labelFn(m)+'</div>';
+      }).join('');
+      list.style.display='block'; selIdx=-1;
+      list.querySelectorAll('.ac-item').forEach(function(el,i){
+        el.addEventListener('mousedown',function(e){e.preventDefault();inp.value=matches[i].name;list.style.display='none';});
+      });
+    });
+    inp.addEventListener('keydown',function(e){
+      var items=list.querySelectorAll('.ac-item');
+      if(!items.length)return;
+      if(e.key==='ArrowDown'){e.preventDefault();selIdx=Math.min(selIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
+      else if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
+      else if(e.key==='Enter'&&selIdx>=0){e.preventDefault();var m=cache.filter(function(m){return m.name.indexOf(inp.value.trim())>=0;})[selIdx];if(m){inp.value=m.name;list.style.display='none';}}
+      else if(e.key==='Escape'){list.style.display='none';}
+    });
+    inp.addEventListener('blur',function(){setTimeout(function(){list.style.display='none';},150);});
+  }
+
+  setupAc('m-item','ac-item',itemsMasterCache,function(m){
+    var cat=m.category?'<span style="font-size:11px;color:var(--text3);">'+m.category+'</span>':'';
+    var desc=m.description?'<span style="font-size:11px;color:var(--text3);margin-left:4px;">'+m.description+'</span>':'';
+    return '<span style="font-weight:700;flex:1;">'+m.name+'</span><span style="display:flex;align-items:center;gap:4px;">'+cat+desc+'</span>';
+  });
+
+  setupAc('m-ability','ac-ability',abilitiesMasterCache,function(m){
+    var desc=m.description?'<span style="font-size:11px;color:var(--text3);">'+m.description+'</span>':'';
+    return '<span style="font-weight:700;flex:1;">'+m.name+'</span>'+desc;
+  });
+}
+
+
 var movesMasterCache = [];
 
 function loadMovesMaster() {
@@ -1395,7 +1448,7 @@ function doLogin(){
     g('main-panel').style.display='block';
     g('header-right').style.display='flex';
     g('user-badge').textContent='👤 '+user.username;
-    initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initDetailToggle();bindAll();loadAll();
+    initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initItemAbilityAutocomplete();initDetailToggle();bindAll();loadAll();
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
@@ -1428,7 +1481,7 @@ function doConnect(){
         g('main-panel').style.display='block';
         g('header-right').style.display='flex';
         g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initDetailToggle();bindAll();loadAll();
+        initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initItemAbilityAutocomplete();initDetailToggle();bindAll();loadAll();
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
@@ -1569,7 +1622,7 @@ g('ltab-register').addEventListener('click',function(){
 // ===== データ読み込み =====
 function loadAll(){
   load(true);
-  Promise.all([loadPokedexMaster(),loadMovesMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
+  Promise.all([loadPokedexMaster(),loadMovesMaster(),loadItemsMaster(),loadAbilitiesMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
     renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
   }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
 }
