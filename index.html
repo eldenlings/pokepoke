@@ -743,6 +743,43 @@ body {
 .detail-toggle.open .detail-toggle-arrow { transform: rotate(180deg); }
 .detail-body { display: none; }
 .detail-body.open { display: block; }
+
+/* ========== 相手パーティ クイック入力 ========== */
+.opp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.opp-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface); border: 2px solid var(--border);
+  border-radius: var(--radius-sm); padding: 5px 10px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all .12s; -webkit-tap-highlight-color: transparent;
+}
+.opp-tag:hover { border-color: var(--accent); background: var(--accent-bg); }
+.opp-tag.has-detail { border-color: var(--accent-light); background: var(--accent-bg); }
+.opp-tag-del { font-size: 14px; color: var(--text3); font-weight: 900; line-height: 1; }
+.opp-tag-del:hover { color: var(--lose); }
+.opp-search-wrap { position: relative; }
+.opp-search-wrap input {
+  width: 100%; padding: 10px 13px; font-size: 14px;
+  border: 2px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text); font-family: inherit;
+  outline: none; transition: border-color .15s, box-shadow .15s; -webkit-appearance: none;
+}
+.opp-search-wrap input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,91,219,.12); background: #fff; }
+.opp-ac-list {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--surface); border: 2px solid var(--accent);
+  border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  max-height: 260px; overflow-y: auto; z-index: 100; box-shadow: var(--shadow-md);
+}
+.opp-ac-section { font-size: 10px; font-weight: 800; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; padding: 6px 12px 3px; background: var(--bg); }
+.opp-ac-item {
+  padding: 10px 13px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600;
+  -webkit-tap-highlight-color: transparent; transition: background .1s;
+}
+.opp-ac-item:last-child { border-bottom: none; }
+.opp-ac-item:hover, .opp-ac-item.active { background: var(--accent-bg); }
+
 @media (min-width: 640px) {
   .tabs {
     position: sticky;
@@ -863,15 +900,23 @@ body {
         <p class="card-title">自パーティ</p>
         <div class="form-row" style="margin-bottom:8px;">
           <label>登録済みパーティから選択</label>
-          <select id="sel-party"><option value="">-- パーティを選択 --</option></select>
+          <select id="sel-party"><option value="">-- 直接入力 --</option></select>
         </div>
-        <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">スロットをタップして追加・編集</p>
         <div id="my-slots" class="party-grid"></div>
+        <div class="my-slot-search">
+          <div class="autocomplete-wrap">
+            <input id="my-quick-input" placeholder="ポケモン名を入力して追加..." autocomplete="off">
+            <div class="autocomplete-list" id="ac-my-quick" style="display:none;"></div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <p class="card-title">相手パーティ</p>
-        <div id="opp-slots" class="party-grid"></div>
-        <button class="btn btn-sm" id="btn-add-opp" style="margin-top:4px;">＋ 追加</button>
+        <div class="opp-tags" id="opp-tags"></div>
+        <div class="opp-search-wrap">
+          <input id="opp-search" placeholder="ポケモン名で検索して追加..." autocomplete="off">
+          <div class="opp-ac-list" id="opp-ac-list" style="display:none;"></div>
+        </div>
       </div>
       <!-- 選出・初手カード -->
       <div class="card" id="selection-card" style="display:none;">
@@ -1392,6 +1437,8 @@ function initAllAc() {
   initItemAc();
   initAbilityAc();
   initDetailToggle();
+  initMyQuickAc();
+  initOppSearchAc();
 }
 
 // ===== ログイン/登録 =====
@@ -1511,10 +1558,6 @@ function bindAll(){
     selState={my:[],myLead:null,opp:[],oppLead:null};
     if(isNaN(idx)){tMP=[];renderMySlots();return;}
     tMP=(cache.parties[idx]&&cache.parties[idx].pokes||[]).slice();renderMySlots();
-  });
-  g('btn-add-opp').addEventListener('click',function(){
-    if(cache.dex.length>0) openPickModal(function(p){tOP.push(p);renderMySlots();});
-    else openPokeModal('opp',null);
   });
   g('btn-save-battle').addEventListener('click',saveBattle);
   g('btn-new-party').addEventListener('click',function(){openPartyModal(null);});
@@ -1637,10 +1680,12 @@ function loadAll() {
     loadDex(),
     loadParties(),
     loadTags(),
-    loadSeasons()
+    loadSeasons(),
+    loadOppStats()
   ]).then(function() {
     renderMySlots(); renderPartySelect(); renderParties();
     renderDex(); renderBattleTagArea(); renderBattleSeasonArea();
+    renderOppTags();
     return renderHistory();
   }).then(renderStats)
     .catch(function(e) { toast('読込エラー: ' + e.message, 4000); })
@@ -1881,22 +1926,203 @@ function saveTagEdit(){
 
 
 // ===== 対戦記録 =====
+
+// 最近・頻出ポケモンのキャッシュ
+var oppRecentCache=[];   // P1: 直近対戦の相手ポケモン名（重複なし）
+var oppFreqCache=[];     // P2: 頻出順（{name,count}）
+
+function loadOppStats(){
+  // 直近200件から相手ポケモンを集計
+  return sb.from('battle_opp_pokemon')
+    .select('name, battles!inner(user_id)')
+    .eq('battles.user_id', currentUser.id)
+    .order('battle_id', {ascending:false})
+    .limit(600)
+    .then(function(r){
+      if(r.error||!r.data)return;
+      var recent=[], freqMap={};
+      r.data.forEach(function(row){
+        var n=row.name;
+        if(!n)return;
+        if(recent.indexOf(n)<0)recent.push(n);
+        freqMap[n]=(freqMap[n]||0)+1;
+      });
+      oppRecentCache=recent.slice(0,10);
+      oppFreqCache=Object.keys(freqMap).map(function(n){return{name:n,count:freqMap[n]};})
+        .sort(function(a,b){return b.count-a.count;}).slice(0,20);
+    });
+}
+
 function renderMySlots(){
   var d=g('my-slots'),h='';
   for(var i=0;i<6;i++)h+=slotHtml(tMP[i]||null,i,'my');
   d.innerHTML=h;
-  bindSlots(d,function(i){if(cache.dex.length>0)openPickModal(function(p){tMP[i]=p;renderMySlots();});else openPokeModal('my',i);});
-  var od=g('opp-slots'),oh='';
-  for(var j=0;j<tOP.length;j++)oh+=slotHtml(tOP[j],j,'opp');
-  od.innerHTML=oh;
-  bindSlots(od,function(i){
-    if(cache.dex.length>0) openPickModal(function(p){tOP[i]=p;renderMySlots();});
-    else openPokeModal('opp',i);
+  // スロットタップ → 編集モーダル（名前入力済みのものを編集）
+  bindSlots(d,function(i){
+    if(tMP[i]){
+      // 既存スロット → ポケモンモーダルで詳細編集
+      openPokeModal('my',i);
+    }
+    // 空スロットは my-quick-input で追加するので何もしない
   });
   renderSelectionCard();
 }
+
+function renderOppTags(){
+  var area=g('opp-tags');
+  if(!area)return;
+  area.innerHTML='';
+  tOP.forEach(function(p,i){
+    var hasDetail=p.item||p.ability||p.move1||p.nature;
+    var tag=document.createElement('div');
+    tag.className='opp-tag'+(hasDetail?' has-detail':'');
+    // 名前部分（タップで詳細編集）
+    var nameSpan=document.createElement('span');
+    nameSpan.textContent=p.name;
+    nameSpan.style.cursor='pointer';
+    nameSpan.addEventListener('click',function(e){e.stopPropagation();openPokeModal('opp',i);});
+    // 詳細があれば小さく表示
+    var sub='';
+    if(p.item)sub+=p.item+' ';
+    if(p.ability)sub+=p.ability;
+    var subSpan=document.createElement('span');
+    if(sub){subSpan.textContent=sub.trim();subSpan.style.cssText='font-size:10px;color:var(--text3);font-weight:400;';}
+    // ×ボタン
+    var del=document.createElement('span');
+    del.className='opp-tag-del';
+    del.textContent='×';
+    del.addEventListener('click',function(e){
+      e.stopPropagation();
+      tOP.splice(i,1);
+      selState.opp=selState.opp.filter(function(x){return x!==i;}).map(function(x){return x>i?x-1:x;});
+      if(selState.oppLead===i)selState.oppLead=null;
+      else if(selState.oppLead>i)selState.oppLead--;
+      renderOppTags();
+      renderSelectionCard();
+    });
+    tag.appendChild(nameSpan);
+    if(sub)tag.appendChild(subSpan);
+    tag.appendChild(del);
+    area.appendChild(tag);
+  });
+}
+
+// 自パーティ クイック入力AC
+function initMyQuickAc(){
+  setupAc('my-quick-input','ac-my-quick',
+    function(){ return master.pokedex; },
+    function(p){
+      var t1=p.type1?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type1]||'#999')+'">'+p.type1+'</span>':'';
+      var t2=p.type2?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type2]||'#999')+'">'+p.type2+'</span>':'';
+      return '<span style="font-weight:700;flex:1;">'+p.name+'</span><span style="display:flex;gap:3px;">'+t1+t2+'</span>';
+    },
+    function(p){
+      var slot=tMP.findIndex(function(x){return !x;});
+      if(slot<0&&tMP.length<6)slot=tMP.length;
+      if(slot<0){toast('自パーティは6体までです');return;}
+      tMP[slot]={name:p.name,type1:p.type1,type2:p.type2,bs_hp:p.bs_hp,bs_atk:p.bs_atk,bs_def:p.bs_def,bs_spa:p.bs_spa,bs_spd:p.bs_spd,bs_spe:p.bs_spe};
+      g('my-quick-input').value='';
+      renderMySlots();
+    }
+  );
+  // 未マスター名も直接Enterで追加
+  g('my-quick-input').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){
+      var n=g('my-quick-input').value.trim();
+      if(!n)return;
+      var slot=tMP.findIndex(function(x){return !x;});
+      if(slot<0&&tMP.length<6)slot=tMP.length;
+      if(slot<0){toast('自パーティは6体までです');return;}
+      tMP[slot]={name:n};
+      g('my-quick-input').value='';
+      g('ac-my-quick').style.display='none';
+      renderMySlots();
+    }
+  });
+}
+
+// 相手パーティ クイック入力AC（P1→P2→P3優先）
+function initOppSearchAc(){
+  var inp=g('opp-search'), list=g('opp-ac-list'), selIdx=-1, curMatches=[];
+
+  function buildCandidates(q){
+    var result=[], added=new Set();
+    function add(name,priority){
+      if(added.has(name))return;
+      if(q&&name.indexOf(q)<0)return;
+      added.add(name);
+      result.push({name:name,priority:priority});
+    }
+    // P1: 最近見たポケモン
+    oppRecentCache.forEach(function(n){add(n,'recent');});
+    // P2: 頻出
+    oppFreqCache.forEach(function(o){add(o.name,'freq');});
+    // P3: マスター検索
+    master.pokedex.forEach(function(p){add(p.name,'master');});
+    return result.slice(0,12);
+  }
+
+  function renderList(q){
+    curMatches=buildCandidates(q);
+    if(!curMatches.length){list.style.display='none';return;}
+    var prevPriority='';
+    var html=curMatches.map(function(m,i){
+      var sec='';
+      if(m.priority!==prevPriority){
+        prevPriority=m.priority;
+        var label=m.priority==='recent'?'🕐 最近見た':m.priority==='freq'?'📊 よく見る':'🔍 検索';
+        sec='<div class="opp-ac-section">'+label+'</div>';
+      }
+      var mp=master.pokedex.find(function(p){return p.name===m.name;});
+      var badges=mp?(typeHtml(mp.type1)+typeHtml(mp.type2)):'';
+      return sec+'<div class="opp-ac-item" data-i="'+i+'"><span style="flex:1;">'+m.name+'</span>'+badges+'</div>';
+    }).join('');
+    list.innerHTML=html;
+    list.style.display='block';
+    selIdx=-1;
+    list.querySelectorAll('.opp-ac-item').forEach(function(el,i){
+      el.addEventListener('mousedown',function(e){e.preventDefault();selectOpp(i);});
+    });
+  }
+
+  function selectOpp(i){
+    var m=curMatches[i];
+    if(!m)return;
+    if(tOP.length>=6){toast('相手パーティは6体までです');return;}
+    var mp=master.pokedex.find(function(p){return p.name===m.name;})||{};
+    tOP.push({name:m.name,type1:mp.type1||null,type2:mp.type2||null});
+    inp.value='';
+    list.style.display='none';
+    selIdx=-1;
+    renderOppTags();
+    renderSelectionCard();
+  }
+
+  inp.addEventListener('input',function(){renderList(inp.value.trim());});
+  inp.addEventListener('focus',function(){if(!inp.value.trim())renderList('');});
+  inp.addEventListener('keydown',function(e){
+    var items=list.querySelectorAll('.opp-ac-item');
+    if(!items.length){
+      if(e.key==='Enter'){
+        var n=inp.value.trim();
+        if(!n)return;
+        if(tOP.length>=6){toast('相手パーティは6体までです');return;}
+        tOP.push({name:n});
+        inp.value='';list.style.display='none';
+        renderOppTags();renderSelectionCard();
+      }
+      return;
+    }
+    if(e.key==='ArrowDown'){e.preventDefault();selIdx=Math.min(selIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
+    else if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
+    else if(e.key==='Enter'){e.preventDefault();if(selIdx>=0)selectOpp(selIdx);else{var n=inp.value.trim();if(n){if(tOP.length>=6){toast('相手パーティは6体までです');return;}tOP.push({name:n});inp.value='';list.style.display='none';renderOppTags();renderSelectionCard();}}}
+    else if(e.key==='Escape'){list.style.display='none';}
+  });
+  inp.addEventListener('blur',function(){setTimeout(function(){list.style.display='none';},150);});
+}
+
 function renderPartySelect(){
-  var s=g('sel-party'),prev=s.value,h='<option value="">-- パーティを選択 --</option>';
+  var s=g('sel-party'),prev=s.value,h='<option value="">-- 直接入力 --</option>';
   cache.parties.forEach(function(p,i){h+='<option value="'+i+'">'+p.name+'</option>';});
   s.innerHTML=h;s.value=prev;
 }
@@ -1937,7 +2163,7 @@ function saveBattle(){
     selState={my:[],myLead:null,opp:[],oppLead:null};
     g('battle-memo').value='';g('sel-party').value='';
     // シーズンは次の対戦でも使うため維持
-    renderMySlots();renderBattleTagArea();
+    renderMySlots();renderOppTags();renderBattleTagArea();
     toast('対戦を記録しました！');
   }).catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
