@@ -1609,6 +1609,11 @@ g('ltab-register').addEventListener('click',function(){
 
 // ===== localStorage復元 =====
 (function(){
+  // URLパラメータから自動接続（友人共有用）
+  var params=new URLSearchParams(location.search);
+  var pUrl=params.get('url'),pKey=params.get('key');
+  if(pUrl&&pKey){g('sb-url').value=pUrl;g('sb-key').value=pKey;doConnect();return;}
+  // localStorage復元
   var u=localStorage.getItem('sb_url'),k=localStorage.getItem('sb_key');
   if(u&&k){g('sb-url').value=u;g('sb-key').value=k;doConnect();}
 })();
