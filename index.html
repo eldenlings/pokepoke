@@ -1442,22 +1442,27 @@ function doLogin(){
 
 
 // ===== 接続 =====
-function doConnect(){
+function doConnect(silent){
   var url=g('sb-url').value.trim(),key=g('sb-key').value.trim();
   var err=g('err-msg');
-  err.style.display='none';
-  if(!url||!key){err.textContent='URLとキーを入力してください';err.style.display='block';return;}
+  if(err)err.style.display='none';
+  if(!url||!key){
+    if(!silent&&err){err.textContent='URLとキーを入力してください';err.style.display='block';}
+    return;
+  }
   var btn=g('btn-connect');
-  btn.textContent='接続中...';btn.disabled=true;
+  if(!silent&&btn){btn.textContent='接続中...';btn.disabled=true;}
   var client=supabase.createClient(url,key,{db:{schema:"public"}});
   client.from('pokemon').select('id').limit(1).then(function(r){
-    btn.textContent='接続する';btn.disabled=false;
-    if(r.error){err.textContent='接続失敗: '+r.error.message;err.style.display='block';return;}
+    if(!silent&&btn){btn.textContent='接続する';btn.disabled=false;}
+    if(r.error){
+      if(!silent&&err){err.textContent='接続失敗: '+r.error.message;err.style.display='block';}
+      return;
+    }
     sb=client;
     localStorage.setItem('sb_url',url);
     localStorage.setItem('sb_key',key);
     g('setup-panel').style.display='none';
-    // 保存済みユーザーがあれば自動ログイン
     var saved=localStorage.getItem('current_user');
     if(saved){
       try{
@@ -1526,12 +1531,17 @@ function bindAll(){
     if(!name)return;
     var existing=cache.tags.find(function(t){return t.name===name;});
     if(existing){
+      // 既存タグ → 選択状態にする
       if(battleTagIds.indexOf(existing.id)<0)battleTagIds.push(existing.id);
-      renderBattleTagArea();inp.value='';
+      renderBattleTagArea();
     }else{
-      addTagGlobal(name,function(id){battleTagIds.push(id);renderBattleTagArea();});
-      inp.value='';
+      // 新規タグ → DB登録してから選択
+      addTagGlobal(name,function(id){
+        if(battleTagIds.indexOf(id)<0)battleTagIds.push(id);
+        renderBattleTagArea();
+      });
     }
+    inp.value='';
   });
   g('battle-tag-input').addEventListener('keydown',function(e){if(e.key==='Enter'){g('btn-add-tag').click();}});
   // タグ編集モーダル
@@ -1816,13 +1826,12 @@ function toggleBattleTag(tid,btn){
 function addTagGlobal(name,cb){
   name=name.trim();
   if(!name)return;
-  if(cache.tags.find(function(t){return t.name===name;})){toast('同名のタグが既にあります');return;}
   sb.from('tags').insert({name:name,user_id:currentUser.id}).select().single().then(function(r){
     if(r.error){toast('タグ追加失敗: '+r.error.message,4000);return;}
     cache.tags.push(r.data);
+    updateTagFilter();
     if(cb)cb(r.data.id);
     renderBattleTagArea();
-    updateTagFilter();
   });
 }
 function updateTagFilter(){
