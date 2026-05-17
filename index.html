@@ -1117,7 +1117,6 @@ var NATURES=NM.concat(NN);
 var EK=['hp','atk','def','spa','spd','spe'];
 var SL={hp:'H',atk:'A',def:'B',spa:'C',spd:'D',spe:'S'};
 var BC={hp:'#4caf50',atk:'#f44336',def:'#ff9800',spa:'#2196f3',spd:'#9c27b0',spe:'#00bcd4'};
-var SCHEMA='public';
 var PRESET_TAGS=['立ち回り','選出','初手','構築'];
 var TYPES=['ノーマル','ほのお','みず','くさ','でんき','こおり','かくとう','どく','じめん','ひこう','エスパー','むし','いわ','ゴースト','ドラゴン','あく','はがね','フェアリー'];
 var TYPE_COLOR={
@@ -1127,183 +1126,6 @@ var TYPE_COLOR={
   'いわ':'#b8a848','ゴースト':'#5c4d8a','ドラゴン':'#5060e8','あく':'#4d3d3d',
   'はがね':'#8a8ab0','フェアリー':'#d884b4'
 };
-
-// ===== ポケモンマスターデータ（名前・タイプ・種族値） =====
-// [name, type1, type2, hp, atk, def, spa, spd, spe]
-// ===== ポケモンマスターデータ（DBから取得） =====
-var pokedexMasterCache = [];  // DB取得後にここにキャッシュ
-
-function loadPokedexMaster() {
-  return sb.from('pokedex_master')
-    .select('id,ndex,name,form_name,type1,type2,bs_hp,bs_atk,bs_def,bs_spa,bs_spd,bs_spe,has_mega,is_available')
-    .eq('is_available', true)
-    .order('ndex')
-    .then(function(r) {
-      if (r.error) { console.warn('pokedex_master取得失敗:', r.error.message); return; }
-      pokedexMasterCache = r.data || [];
-    });
-}
-
-
-// ===== 持ち物・特性マスターデータ（DBから取得） =====
-var itemsMasterCache = [];
-var abilitiesMasterCache = [];
-
-function loadItemsMaster() {
-  return sb.from('items_master').select('id,name,category,description').eq('is_available',true).order('name')
-    .then(function(r){ if(r.error){console.warn('items_master取得失敗:',r.error.message);return;} itemsMasterCache=r.data||[]; });
-}
-function loadAbilitiesMaster() {
-  return sb.from('abilities_master').select('id,name,description').eq('is_available',true).order('name')
-    .then(function(r){ if(r.error){console.warn('abilities_master取得失敗:',r.error.message);return;} abilitiesMasterCache=r.data||[]; });
-}
-
-function initItemAbilityAutocomplete(){
-  // 汎用AC初期化（入力欄ID・リストID・キャッシュ・表示テキスト生成関数）
-  function setupAc(inpId, listId, cache, labelFn){
-    var inp=g(inpId), list=g(listId), selIdx=-1;
-    inp.addEventListener('input',function(){
-      var q=inp.value.trim();
-      if(!q||!cache.length){list.style.display='none';return;}
-      var matches=cache.filter(function(m){return m.name.indexOf(q)>=0;}).slice(0,8);
-      if(!matches.length){list.style.display='none';return;}
-      list.innerHTML=matches.map(function(m,i){
-        return '<div class="ac-item" data-i="'+i+'">'+labelFn(m)+'</div>';
-      }).join('');
-      list.style.display='block'; selIdx=-1;
-      list.querySelectorAll('.ac-item').forEach(function(el,i){
-        el.addEventListener('mousedown',function(e){e.preventDefault();inp.value=matches[i].name;list.style.display='none';});
-      });
-    });
-    inp.addEventListener('keydown',function(e){
-      var items=list.querySelectorAll('.ac-item');
-      if(!items.length)return;
-      if(e.key==='ArrowDown'){e.preventDefault();selIdx=Math.min(selIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
-      else if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);});}
-      else if(e.key==='Enter'&&selIdx>=0){e.preventDefault();var m=cache.filter(function(m){return m.name.indexOf(inp.value.trim())>=0;})[selIdx];if(m){inp.value=m.name;list.style.display='none';}}
-      else if(e.key==='Escape'){list.style.display='none';}
-    });
-    inp.addEventListener('blur',function(){setTimeout(function(){list.style.display='none';},150);});
-  }
-
-  setupAc('m-item','ac-item',itemsMasterCache,function(m){
-    var cat=m.category?'<span style="font-size:11px;color:var(--text3);">'+m.category+'</span>':'';
-    var desc=m.description?'<span style="font-size:11px;color:var(--text3);margin-left:4px;">'+m.description+'</span>':'';
-    return '<span style="font-weight:700;flex:1;">'+m.name+'</span><span style="display:flex;align-items:center;gap:4px;">'+cat+desc+'</span>';
-  });
-
-  setupAc('m-ability','ac-ability',abilitiesMasterCache,function(m){
-    var desc=m.description?'<span style="font-size:11px;color:var(--text3);">'+m.description+'</span>':'';
-    return '<span style="font-weight:700;flex:1;">'+m.name+'</span>'+desc;
-  });
-}
-
-
-var movesMasterCache = [];
-
-function loadMovesMaster() {
-  return sb.from('moves_master')
-    .select('id,name,type,category,power,pp')
-    .eq('is_available', true)
-    .order('name')
-    .then(function(r) {
-      if (r.error) { console.warn('moves_master取得失敗:', r.error.message); return; }
-      movesMasterCache = r.data || [];
-    });
-}
-
-function initMoveAutocomplete() {
-  [1,2,3,4].forEach(function(n) {
-    var inp = g('m-move'+n);
-    var list = g('ac-move'+n);
-    var selIdx = -1;
-    inp.addEventListener('input', function() {
-      var q = inp.value.trim();
-      if (!q || !movesMasterCache.length) { list.style.display='none'; return; }
-      var matches = movesMasterCache.filter(function(m) { return m.name.indexOf(q) >= 0; }).slice(0, 8);
-      if (!matches.length) { list.style.display='none'; return; }
-      list.innerHTML = matches.map(function(m, i) {
-        var badge = '<span class="type-badge" style="background:'+(TYPE_COLOR[m.type]||'#999')+'">'+m.type+'</span>';
-        var cat = m.category==='ぶつり'?'⚔️':m.category==='とくしゅ'?'✨':'🔄';
-        var pw = m.power ? m.power+'威力' : 'へんか';
-        return '<div class="ac-item" data-i="'+i+'">'+
-          '<span style="font-weight:700;flex:1;">'+m.name+'</span>'+
-          '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);">'+cat+' '+pw+'　'+badge+'</span>'+
-        '</div>';
-      }).join('');
-      list.style.display = 'block';
-      selIdx = -1;
-      list.querySelectorAll('.ac-item').forEach(function(el, i) {
-        el.addEventListener('mousedown', function(e) {
-          e.preventDefault();
-          inp.value = matches[i].name;
-          list.style.display = 'none';
-        });
-      });
-    });
-    inp.addEventListener('keydown', function(e) {
-      var items = list.querySelectorAll('.ac-item');
-      if (!items.length) return;
-      if (e.key==='ArrowDown') { e.preventDefault(); selIdx=Math.min(selIdx+1,items.length-1); items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);}); }
-      else if (e.key==='ArrowUp') { e.preventDefault(); selIdx=Math.max(selIdx-1,0); items.forEach(function(el,i){el.classList.toggle('active',i===selIdx);}); }
-      else if (e.key==='Enter' && selIdx>=0) { e.preventDefault(); inp.value=matches[selIdx].name; list.style.display='none'; }
-      else if (e.key==='Escape') { list.style.display='none'; }
-    });
-    inp.addEventListener('blur', function() { setTimeout(function(){list.style.display='none';}, 150); });
-  });
-}
-
-
-function initAutocomplete(){
-  var inp=g('m-name');
-  var list=g('ac-list');
-  inp.addEventListener('input',function(){
-    var q=inp.value.trim();
-    if(!q){list.style.display='none';return;}
-    var matches=pokedexMasterCache.filter(function(p){return p.name.indexOf(q)>=0;}).slice(0,8);
-    if(!matches.length){list.style.display='none';return;}
-    list.innerHTML=matches.map(function(p,i){
-      var t1=p.type1?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type1]||'#999')+'">'+p.type1+'</span>':'';
-      var t2=p.type2?'<span class="type-badge" style="background:'+(TYPE_COLOR[p.type2]||'#999')+'">'+p.type2+'</span>':'';
-      return '<div class="ac-item" data-i="'+i+'">'+
-        '<span style="font-weight:700;flex:1;">'+p.name+'</span>'+
-        '<span style="display:flex;gap:3px;">'+t1+t2+'</span>'+
-      '</div>';
-    }).join('');
-    list.style.display='block';
-    acSelectedIdx=-1;
-    list.querySelectorAll('.ac-item').forEach(function(el,i){
-      var pd=matches[i];
-      el.addEventListener('mousedown',function(e){e.preventDefault();applyPokedexEntry(pd);});
-    });
-  });
-  inp.addEventListener('keydown',function(e){
-    var items=list.querySelectorAll('.ac-item');
-    if(!items.length)return;
-    if(e.key==='ArrowDown'){e.preventDefault();acSelectedIdx=Math.min(acSelectedIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===acSelectedIdx);});}
-    else if(e.key==='ArrowUp'){e.preventDefault();acSelectedIdx=Math.max(acSelectedIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===acSelectedIdx);});}
-    else if(e.key==='Enter'&&acSelectedIdx>=0){e.preventDefault();var item=items[acSelectedIdx];if(item){var idx=parseInt(item.getAttribute('data-i'));var q2=inp.value.trim();var m2=pokedexMasterCache.filter(function(p){return p.name.indexOf(q2)>=0;});if(m2[idx])applyPokedexEntry(m2[idx]);}}
-    else if(e.key==='Escape'){list.style.display='none';}
-  });
-  inp.addEventListener('blur',function(){setTimeout(function(){list.style.display='none';},150);});
-}
-function applyPokedexEntry(pd){
-  g('m-name').value=pd.name;
-  g('ac-list').style.display='none';
-  g('m-type1').value=pd.type1||'';
-  g('m-type2').value=pd.type2||'';
-  setBs({hp:pd.bs_hp,atk:pd.bs_atk,def:pd.bs_def,spa:pd.bs_spa,spd:pd.bs_spd,spe:pd.bs_spe});
-  var db=g('detail-body');var dt=g('detail-toggle');
-  if(!db.classList.contains('open')){db.classList.add('open');dt.classList.add('open');}
-}
-
-// 詳細トグル
-function initDetailToggle(){
-  var dt=g('detail-toggle');var db=g('detail-body');
-  dt.addEventListener('click',function(){
-    db.classList.toggle('open');dt.classList.toggle('open');
-  });
-}
 
 // ===== 状態 =====
 var sb=null,cache={dex:[],parties:[],tags:[]};
@@ -1317,6 +1139,21 @@ var editTagIds=[];        // タグ編集モーダルで選択中のtag id
 // 選出・初手の状態（スロット再描画でチェックが消えないよう外部管理）
 var selState={my:[],myLead:null,opp:[],oppLead:null};
 
+
+// ===== マスターキャッシュ =====
+var master = {
+  pokedex:    [],   // pokedex_master
+  moves:      [],   // moves_master
+  items:      [],   // items_master
+  abilities:  []    // abilities_master
+};
+
+// ===== ユーティリティ =====
+function g(id){return document.getElementById(id);}
+function toast(msg,d){var t=g('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},d||2500);}
+function load(v){g('loading').classList.toggle('show',v);}
+
+
 // ===== モーダル背景クリックで閉じる =====
 document.addEventListener('click', function(e){
   if(e.target.classList.contains('modal-overlay')){
@@ -1324,10 +1161,6 @@ document.addEventListener('click', function(e){
   }
 });
 
-// ===== ユーティリティ =====
-function g(id){return document.getElementById(id);}
-function toast(msg,d){var t=g('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},d||2500);}
-function load(v){g('loading').classList.toggle('show',v);}
 
 // ===== タイプ =====
 function typeHtml(t){ if(!t)return''; return'<span class="type-badge" style="background:'+( TYPE_COLOR[t]||'#999')+'">' +t+'</span>';}
@@ -1342,6 +1175,7 @@ function initTypes(){
   g('m-type1').innerHTML=opts1;
   g('m-type2').innerHTML=opts2;
 }
+
 
 // ===== 性格 =====
 function initNatures(){
@@ -1360,6 +1194,7 @@ function updNH(){
   if(!f||!f[1]){el.innerHTML='<span class="neu">補正なし</span>';return;}
   el.innerHTML='<span class="up">'+f[1]+'↑</span> <span class="down">'+f[2]+'↓</span>';
 }
+
 
 // ===== 種族値バー =====
 function updBs(){
@@ -1387,6 +1222,7 @@ function getBs(){var b={};EK.forEach(function(k){var v=parseInt(g('bs-'+k).value
 function setEv(e){EK.forEach(function(k){g('ev-'+k).value=(e&&e[k]!=null)?e[k]:0;});updEv();}
 function setBs(b){EK.forEach(function(k){g('bs-'+k).value=(b&&b[k]!=null)?b[k]:'';});updBs();}
 
+
 // ===== 表示ヘルパー =====
 function evHtml(p){return EK.filter(function(k){return p['ev_'+k]>0;}).map(function(k){return'<span class="ev-pill">'+SL[k]+p['ev_'+k]+'</span>';}).join('');}
 function bsHtml(p){return EK.filter(function(k){return p['bs_'+k]>0;}).map(function(k){return'<span class="bs-pill">'+SL[k]+':'+p['bs_'+k]+'</span>';}).join('');}
@@ -1402,12 +1238,143 @@ function bindSlots(cont,fn){
   });
 }
 
+
 // ===== パスワードハッシュ =====
 function sha256(str){
   var buf=new TextEncoder().encode(str);
   return crypto.subtle.digest('SHA-256',buf).then(function(hash){
     return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
   });
+}
+
+
+// ===== オートコンプリート共通 =====
+/**
+ * setupAc(inpId, listId, cacheFn, labelFn, onSelect)
+ *   inpId   : 入力欄のID
+ *   listId  : ドロップダウンリストのID
+ *   cacheFn : () => array  検索対象のキャッシュを返す関数
+ *   labelFn : (item, idx) => htmlString  候補1件分のHTMLを返す関数
+ *   onSelect: (item) => void  選択時の処理
+ */
+function setupAc(inpId, listId, cacheFn, labelFn, onSelect) {
+  var inp = g(inpId), list = g(listId), selIdx = -1, curMatches = [];
+  if (!inp || !list) return;
+
+  function updateList() {
+    var q = inp.value.trim();
+    if (!q) { list.style.display = 'none'; return; }
+    curMatches = cacheFn().filter(function(m) { return m.name.indexOf(q) >= 0; }).slice(0, 8);
+    if (!curMatches.length) { list.style.display = 'none'; return; }
+    list.innerHTML = curMatches.map(function(m, i) {
+      return '<div class="ac-item" data-i="' + i + '">' + labelFn(m, i) + '</div>';
+    }).join('');
+    list.style.display = 'block';
+    selIdx = -1;
+    list.querySelectorAll('.ac-item').forEach(function(el, i) {
+      el.addEventListener('mousedown', function(e) { e.preventDefault(); select(i); });
+    });
+  }
+
+  function select(i) {
+    if (!curMatches[i]) return;
+    onSelect(curMatches[i]);
+    list.style.display = 'none';
+    selIdx = -1;
+  }
+
+  function highlight() {
+    list.querySelectorAll('.ac-item').forEach(function(el, i) {
+      el.classList.toggle('active', i === selIdx);
+    });
+  }
+
+  inp.addEventListener('input', updateList);
+  inp.addEventListener('keydown', function(e) {
+    if (!curMatches.length) return;
+    if      (e.key === 'ArrowDown')  { e.preventDefault(); selIdx = Math.min(selIdx + 1, curMatches.length - 1); highlight(); }
+    else if (e.key === 'ArrowUp')    { e.preventDefault(); selIdx = Math.max(selIdx - 1, 0); highlight(); }
+    else if (e.key === 'Enter' && selIdx >= 0) { e.preventDefault(); select(selIdx); }
+    else if (e.key === 'Escape')     { list.style.display = 'none'; }
+  });
+  inp.addEventListener('blur', function() { setTimeout(function() { list.style.display = 'none'; }, 150); });
+}
+
+// ポケモン名AC
+function initPokedexAc() {
+  setupAc('m-name', 'ac-list',
+    function() { return master.pokedex; },
+    function(p) {
+      var t1 = p.type1 ? '<span class="type-badge" style="background:' + (TYPE_COLOR[p.type1]||'#999') + '">' + p.type1 + '</span>' : '';
+      var t2 = p.type2 ? '<span class="type-badge" style="background:' + (TYPE_COLOR[p.type2]||'#999') + '">' + p.type2 + '</span>' : '';
+      return '<span style="font-weight:700;flex:1;">' + p.name + '</span><span style="display:flex;gap:3px;">' + t1 + t2 + '</span>';
+    },
+    function(p) {
+      g('m-name').value = p.name;
+      g('m-type1').value = p.type1 || '';
+      g('m-type2').value = p.type2 || '';
+      setBs({hp:p.bs_hp,atk:p.bs_atk,def:p.bs_def,spa:p.bs_spa,spd:p.bs_spd,spe:p.bs_spe});
+      var db = g('detail-body'), dt = g('detail-toggle');
+      if (!db.classList.contains('open')) { db.classList.add('open'); dt.classList.add('open'); }
+    }
+  );
+}
+
+// 技AC（技1〜4）
+function initMoveAc() {
+  [1,2,3,4].forEach(function(n) {
+    setupAc('m-move' + n, 'ac-move' + n,
+      function() { return master.moves; },
+      function(m) {
+        var badge = '<span class="type-badge" style="background:' + (TYPE_COLOR[m.type]||'#999') + '">' + m.type + '</span>';
+        var cat = m.category === 'ぶつり' ? '⚔️' : m.category === 'とくしゅ' ? '✨' : '🔄';
+        var pw = m.power ? m.power + '威力' : 'へんか';
+        return '<span style="font-weight:700;flex:1;">' + m.name + '</span>' +
+               '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);">' + cat + ' ' + pw + '　' + badge + '</span>';
+      },
+      function(m) { g('m-move' + n).value = m.name; }
+    );
+  });
+}
+
+// 持ち物AC
+function initItemAc() {
+  setupAc('m-item', 'ac-item',
+    function() { return master.items; },
+    function(m) {
+      var cat  = m.category    ? '<span style="font-size:11px;color:var(--text3);">' + m.category + '</span>' : '';
+      var desc = m.description ? '<span style="font-size:11px;color:var(--text3);margin-left:4px;">' + m.description + '</span>' : '';
+      return '<span style="font-weight:700;flex:1;">' + m.name + '</span><span style="display:flex;align-items:center;gap:4px;">' + cat + desc + '</span>';
+    },
+    function(m) { g('m-item').value = m.name; }
+  );
+}
+
+// 特性AC
+function initAbilityAc() {
+  setupAc('m-ability', 'ac-ability',
+    function() { return master.abilities; },
+    function(m) {
+      var desc = m.description ? '<span style="font-size:11px;color:var(--text3);">' + m.description + '</span>' : '';
+      return '<span style="font-weight:700;flex:1;">' + m.name + '</span>' + desc;
+    },
+    function(m) { g('m-ability').value = m.name; }
+  );
+}
+
+// 詳細トグル
+function initDetailToggle() {
+  var dt = g('detail-toggle'), db = g('detail-body');
+  dt.addEventListener('click', function() { db.classList.toggle('open'); dt.classList.toggle('open'); });
+}
+
+// まとめて初期化
+function initAllAc() {
+  initPokedexAc();
+  initMoveAc();
+  initItemAc();
+  initAbilityAc();
+  initDetailToggle();
 }
 
 // ===== ログイン/登録 =====
@@ -1448,13 +1415,14 @@ function doLogin(){
     g('main-panel').style.display='block';
     g('header-right').style.display='flex';
     g('user-badge').textContent='👤 '+user.username;
-    initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initItemAbilityAutocomplete();initDetailToggle();bindAll();loadAll();
+    initNatures();initTypes();initAllAc();bindAll();loadAll();
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
     btn.disabled=false;btn.textContent=loginMode==='login'?'ログイン':'登録する';
   });
 }
+
 
 // ===== 接続 =====
 function doConnect(){
@@ -1481,13 +1449,14 @@ function doConnect(){
         g('main-panel').style.display='block';
         g('header-right').style.display='flex';
         g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();initTypes();initAutocomplete();initMoveAutocomplete();initItemAbilityAutocomplete();initDetailToggle();bindAll();loadAll();
+        initNatures();initTypes();initAllAc();bindAll();loadAll();
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
     showLoginPanel();
   });
 }
+
 
 // ===== イベントバインド =====
 function bindAll(){
@@ -1594,7 +1563,8 @@ function bindAll(){
   EK.forEach(function(k){g('bs-'+k).addEventListener('input',updBs);g('ev-'+k).addEventListener('input',updEv);});
 }
 
-// ===== 接続ボタン即時バインド =====
+
+// ===== 接続ボタン・ログイン即時バインド =====
 g('btn-connect').addEventListener('click',doConnect);
 
 // ===== ログインパネル即時バインド =====
@@ -1619,13 +1589,39 @@ g('ltab-register').addEventListener('click',function(){
   if(u&&k){g('sb-url').value=u;g('sb-key').value=k;doConnect();}
 })();
 
+
 // ===== データ読み込み =====
-function loadAll(){
+function loadAll() {
   load(true);
-  Promise.all([loadPokedexMaster(),loadMovesMaster(),loadItemsMaster(),loadAbilitiesMaster(),loadDex(),loadParties(),loadTags()]).then(function(){
-    renderMySlots();renderPartySelect();renderParties();renderDex();renderBattleTagArea();return renderHistory();
-  }).then(renderStats).catch(function(e){toast('読込エラー: '+e.message,4000);}).then(function(){load(false);});
+  Promise.all([
+    loadMasters(),
+    loadDex(),
+    loadParties(),
+    loadTags()
+  ]).then(function() {
+    renderMySlots(); renderPartySelect(); renderParties();
+    renderDex(); renderBattleTagArea();
+    return renderHistory();
+  }).then(renderStats)
+    .catch(function(e) { toast('読込エラー: ' + e.message, 4000); })
+    .then(function() { load(false); });
 }
+
+// マスターデータを並列取得
+function loadMasters() {
+  return Promise.all([
+    sb.from('pokedex_master').select('id,ndex,name,form_name,type1,type2,bs_hp,bs_atk,bs_def,bs_spa,bs_spd,bs_spe,has_mega,is_available').eq('is_available',true).order('ndex')
+      .then(function(r) { if (!r.error) master.pokedex = r.data || []; }),
+    sb.from('moves_master').select('id,name,type,category,power,pp').eq('is_available',true).order('name')
+      .then(function(r) { if (!r.error) master.moves = r.data || []; }),
+    sb.from('items_master').select('id,name,category,description').eq('is_available',true).order('name')
+      .then(function(r) { if (!r.error) master.items = r.data || []; }),
+    sb.from('abilities_master').select('id,name,description').eq('is_available',true).order('name')
+      .then(function(r) { if (!r.error) master.abilities = r.data || []; })
+  ]);
+}
+
+
 function loadDex(){return sb.from('pokemon').select('*').eq('user_id',currentUser.id).order('id').then(function(r){if(r.error)throw r.error;cache.dex=r.data||[];});}
 function loadParties(){
   return Promise.all([
@@ -1648,6 +1644,7 @@ function loadTags(){
     });
   });
 }
+
 
 // ===== タグUI =====
 function renderBattleTagArea(){
@@ -1725,6 +1722,7 @@ function saveTagEdit(){
   .catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
+
 // ===== 対戦記録 =====
 function renderMySlots(){
   var d=g('my-slots'),h='';
@@ -1784,6 +1782,7 @@ function saveBattle(){
   }).catch(function(e){toast('保存失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
+
 // ===== パーティ =====
 function renderParties(){
   var d=g('parties-list');
@@ -1842,6 +1841,7 @@ function delParty(i){
   .then(function(){renderParties();renderPartySelect();toast('削除しました');}).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
 }
 
+
 // ===== 図鑑 =====
 function renderDex(){
   var d=g('dex-list');
@@ -1864,6 +1864,7 @@ function delPoke(id){
   if(!confirm('削除しますか？'))return;load(true);
   sb.from('pokemon').delete().eq('id',id).then(function(r){if(r.error)throw r.error;return loadDex();}).then(function(){renderDex();toast('削除しました');}).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
 }
+
 
 // ===== ポケモンモーダル =====
 function openPokeModal(ctx,id){
@@ -1912,6 +1913,7 @@ function savePoke(){
   }
 }
 
+
 // ===== ピック =====
 function openPickModal(cb){pickCb=cb;g('pick-search').value='';renderPickList();g('modal-pick').classList.add('show');}
 function renderPickList(){
@@ -1930,6 +1932,7 @@ function renderPickList(){
   d.innerHTML=h;
   d.querySelectorAll('[data-pid]').forEach(function(el){el.addEventListener('click',function(){var id=parseInt(el.getAttribute('data-pid'));if(pickCb)pickCb(cache.dex.find(function(p){return p.id===id;}));g('modal-pick').classList.remove('show');});});
 }
+
 
 // ===== 履歴 =====
 function renderHistory(){
@@ -1982,6 +1985,7 @@ function delBattle(id){
   if(!confirm('削除しますか？'))return;load(true);
   sb.from('battles').delete().eq('id',id).then(function(r){if(r.error)throw r.error;return Promise.all([renderHistory(),renderStats()]);}).then(function(){toast('削除しました');}).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
 }
+
 
 // ===== 選出・初手カード =====
 function renderSelectionCard(){
@@ -2095,12 +2099,7 @@ function onLeadChange(side,idx){
   if(active)active.classList.add('lead-checked');
 }
 
-function getChecked(name){
-  var inputs=document.querySelectorAll('input[name="'+name+'"]:checked');
-  var vals=[];
-  inputs.forEach(function(el){vals.push(parseInt(el.value));});
-  return vals;
-}
+
 
 // ===== 設定：タグ管理 =====
 function renderSettingsTags(){
@@ -2183,6 +2182,7 @@ function deleteTag(tid){
     toast('タグを削除しました');
   }).catch(function(e){toast('削除失敗: '+e.message,4000);}).then(function(){load(false);});
 }
+
 
 // ===== 統計 =====
 function renderStats(){
