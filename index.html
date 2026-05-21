@@ -1503,11 +1503,13 @@ function doLogin(){
   }).then(function(user){
     currentUser=user;
     localStorage.setItem('current_user',JSON.stringify(user));
-    g('login-panel').style.display='none';
-    g('main-panel').style.display='block';
-    g('header-right').style.display='flex';
-    g('user-badge').textContent='👤 '+user.username;
-    initNatures();initTypes();initAllAc();bindAll();loadAll();
+    return sb.rpc('set_app_username',{username:user.username}).catch(function(){}).then(function(){
+      g('login-panel').style.display='none';
+      g('main-panel').style.display='block';
+      g('header-right').style.display='flex';
+      g('user-badge').textContent='👤 '+user.username;
+      initNatures();initTypes();initAllAc();bindAll();loadAll();
+    });
   }).catch(function(e){
     err.textContent=e.message;err.style.display='block';
   }).then(function(){
@@ -1542,11 +1544,13 @@ function doConnect(silent){
     if(saved){
       try{
         currentUser=JSON.parse(saved);
-        g('login-panel').style.display='none';
-        g('main-panel').style.display='block';
-        g('header-right').style.display='flex';
-        g('user-badge').textContent='👤 '+currentUser.username;
-        initNatures();initTypes();initAllAc();bindAll();loadAll();
+        sb.rpc('set_app_username',{username:currentUser.username}).catch(function(){}).then(function(){
+          g('login-panel').style.display='none';
+          g('main-panel').style.display='block';
+          g('header-right').style.display='flex';
+          g('user-badge').textContent='👤 '+currentUser.username;
+          initNatures();initTypes();initAllAc();bindAll();loadAll();
+        });
         return;
       }catch(e){localStorage.removeItem('current_user');}
     }
