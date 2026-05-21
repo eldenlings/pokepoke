@@ -1503,7 +1503,7 @@ function doLogin(){
   }).then(function(user){
     currentUser=user;
     localStorage.setItem('current_user',JSON.stringify(user));
-    return sb.rpc('set_app_username',{username:user.username}).catch(function(){}).then(function(){
+    sb.rpc('set_app_username',{username:user.username}).then(function(){
       g('login-panel').style.display='none';
       g('main-panel').style.display='block';
       g('header-right').style.display='flex';
@@ -1544,7 +1544,7 @@ function doConnect(silent){
     if(saved){
       try{
         currentUser=JSON.parse(saved);
-        sb.rpc('set_app_username',{username:currentUser.username}).catch(function(){}).then(function(){
+        sb.rpc('set_app_username',{username:currentUser.username}).then(function(){
           g('login-panel').style.display='none';
           g('main-panel').style.display='block';
           g('header-right').style.display='flex';
