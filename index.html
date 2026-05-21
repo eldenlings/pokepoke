@@ -2549,7 +2549,7 @@ function renderSettingsTags(){
   if(!d)return;
   if(!cache.tags.length){d.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0;">タグがありません</div>';return;}
   // 各タグの使用件数を取得してから描画
-  sb.from('battle_tags').select('tag_id').then(function(r){
+  sb.from('battle_tags').select('tag_id,battles!inner(user_id)').eq('battles.user_id',currentUser.id).then(function(r){
     var usageMap={};
     (r.data||[]).forEach(function(row){usageMap[row.tag_id]=(usageMap[row.tag_id]||0)+1;});
     d.innerHTML='';
@@ -2631,7 +2631,7 @@ function renderStats(){
   if(!sb||!currentUser)return Promise.resolve();
   return Promise.all([
     sb.from('battles').select('id,result,rank,party_id,battle_tags(tag_id,tags(id,name))').eq('user_id',currentUser.id).order('battle_date',{ascending:false}),
-    sb.from('battle_my_pokemon').select('name,is_selected,is_lead,battle_id')
+    sb.from('battle_my_pokemon').select('name,is_selected,is_lead,battle_id,battles!inner(user_id)').eq('battles.user_id',currentUser.id)
   ]).then(function(rs){
     var battles=rs[0].data||[];
     var myPokes=rs[1].data||[];
