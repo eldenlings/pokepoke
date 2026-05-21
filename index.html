@@ -1310,6 +1310,25 @@ function sha256(str){
 }
 
 
+// ===== テキスト正規化（ひらがな/カタカナ/全角/半角統一） =====
+function normalizePokemonText(text) {
+  if (!text) return '';
+  return text
+    .normalize('NFKC')                          // 全角英数→半角、半角カタカナ→全角カタカナ
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/g, function(s) {          // カタカナ→ひらがな
+      return String.fromCharCode(s.charCodeAt(0) - 0x60);
+    })
+    .replace(/[・ー\s]/g, '');                  // 区切り文字除去
+}
+
+// 起動時にsearchKeyを付与（master.pokedex全件に一度だけ実行）
+function buildSearchIndex() {
+  master.pokedex.forEach(function(p) {
+    p._searchKey = normalizePokemonText(p.name);
+  });
+}
+
 // ===== オートコンプリート共通 =====
 /**
  * setupAc(inpId, listId, cacheFn, labelFn, onSelect)
@@ -1321,12 +1340,21 @@ function sha256(str){
  */
 function setupAc(inpId, listId, cacheFn, labelFn, onSelect) {
   var inp = g(inpId), list = g(listId), selIdx = -1, curMatches = [];
+  var isComposing = false;
   if (!inp || !list) return;
+
+  inp.addEventListener('compositionstart', function() { isComposing = true; });
+  inp.addEventListener('compositionend',   function() { isComposing = false; updateList(); });
 
   function updateList() {
     var q = inp.value.trim();
     if (!q) { list.style.display = 'none'; return; }
-    curMatches = cacheFn().filter(function(m) { return m.name.indexOf(q) >= 0; }).slice(0, 8);
+    var nq = normalizePokemonText(q);
+    curMatches = cacheFn().filter(function(m) {
+      // normalizeキーがあればそれで比較、なければfallback
+      var key = m._searchKey || normalizePokemonText(m.name);
+      return key.indexOf(nq) >= 0;
+    }).slice(0, 8);
     if (!curMatches.length) { list.style.display = 'none'; return; }
     list.innerHTML = curMatches.map(function(m, i) {
       return '<div class="ac-item" data-i="' + i + '">' + labelFn(m, i) + '</div>';
@@ -1351,7 +1379,7 @@ function setupAc(inpId, listId, cacheFn, labelFn, onSelect) {
     });
   }
 
-  inp.addEventListener('input', updateList);
+  inp.addEventListener('input', function() { if (!isComposing) updateList(); });
   inp.addEventListener('keydown', function(e) {
     if (!curMatches.length) return;
     if      (e.key === 'ArrowDown')  { e.preventDefault(); selIdx = Math.min(selIdx + 1, curMatches.length - 1); highlight(); }
@@ -1703,7 +1731,9 @@ function loadMasters() {
       .then(function(r) { if (!r.error) master.items = r.data || []; }),
     sb.from('abilities_master').select('id,name,description').eq('is_available',true).order('name')
       .then(function(r) { if (!r.error) master.abilities = r.data || []; })
-  ]);
+  ]).then(function() {
+    buildSearchIndex(); // normalize検索インデックスを構築
+  });
 }
 
 
@@ -2044,12 +2074,19 @@ function initMyQuickAc(){
 // 相手パーティ クイック入力AC（P1→P2→P3優先）
 function initOppSearchAc(){
   var inp=g('opp-search'), list=g('opp-ac-list'), selIdx=-1, curMatches=[];
+  var isComposing=false;
+  inp.addEventListener('compositionstart',function(){isComposing=true;});
+  inp.addEventListener('compositionend',function(){isComposing=false;renderList(inp.value.trim());});
 
   function buildCandidates(q){
+    var nq=normalizePokemonText(q);
     var result=[], added=new Set();
     function add(name,priority){
       if(added.has(name))return;
-      if(q&&name.indexOf(q)<0)return;
+      if(q){
+        var key=normalizePokemonText(name);
+        if(key.indexOf(nq)<0)return;
+      }
       added.add(name);
       result.push({name:name,priority:priority});
     }
@@ -2098,7 +2135,7 @@ function initOppSearchAc(){
     renderSelectionCard();
   }
 
-  inp.addEventListener('input',function(){renderList(inp.value.trim());});
+  inp.addEventListener('input',function(){if(!isComposing)renderList(inp.value.trim());});
   inp.addEventListener('focus',function(){if(!inp.value.trim())renderList('');});
   inp.addEventListener('keydown',function(e){
     var items=list.querySelectorAll('.opp-ac-item');
